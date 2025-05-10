@@ -1,0 +1,49 @@
+import { z } from 'zod';
+import { DeleteAccountParams } from '../../../types';
+import {
+  BaseHederaTransactionTool,
+  BaseHederaTransactionToolParams,
+} from '../common/base-hedera-transaction-tool';
+import { BaseServiceBuilder } from '../../../builders/base-service-builder';
+import { AccountBuilder } from '../../../builders/account/account-builder';
+
+const DeleteAccountZodSchemaCore = z.object({
+  deleteAccountId: z
+    .string()
+    .describe(
+      'The ID of the account to be deleted (e.g., "0.0.xxxx"). This account must sign.'
+    ),
+  transferAccountId: z
+    .string()
+    .describe(
+      'The ID of the account to transfer the remaining HBAR balance to (e.g., "0.0.yyyy").'
+    ),
+});
+
+export class HederaDeleteAccountTool extends BaseHederaTransactionTool<
+  typeof DeleteAccountZodSchemaCore
+> {
+  name = 'hedera-account-delete';
+  description =
+    'Deletes an account. Requires deleteAccountId and transferAccountId. Use metaOptions for execution control.';
+  specificInputSchema = DeleteAccountZodSchemaCore;
+
+  constructor(params: BaseHederaTransactionToolParams) {
+    super(params);
+  }
+
+  protected getServiceBuilder(): BaseServiceBuilder {
+    return this.hederaKit.accounts();
+  }
+
+  protected async callBuilderMethod(
+    builder: BaseServiceBuilder,
+    specificArgs: z.infer<typeof DeleteAccountZodSchemaCore>
+  ): Promise<void> {
+    const deleteParams: DeleteAccountParams = {
+      deleteAccountId: specificArgs.deleteAccountId,
+      transferAccountId: specificArgs.transferAccountId,
+    };
+    (builder as AccountBuilder).deleteAccount(deleteParams);
+  }
+}

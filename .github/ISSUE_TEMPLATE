@@ -1,0 +1,33 @@
+**Description:**
+Provide a concise summary of the feature, task, or bug to be addressed. Highlight its purpose and importance within the overall project.
+
+**Roadmap Reference:**
+[ROADMAP.md > Native Hedera Token Service > Mint Token](https://github.com/hedera-dev/hedera-agent-kit/blob/main/ROADMAP.md)
+
+**Proposed Implementation/Tasks:**
+- [ ] Task 1: Brief description of the task.
+- [ ] Task 2: Additional steps, if necessary.
+- [ ] Task 3: Test coverage, documentation, or related sub-tasks.
+
+**Checklist:**
+- [ ] Code implementation completed.
+- [ ] Relevant tests written and passing.
+- [ ] Documentation (if needed) updated.
+
+**Additional Context/Notes:**
+Include any other relevant details or links, such as:
+- References to documentation, designs, or discussions.
+- Example input/output (if applicable).
+- Known challenges or limitations.
+
+**Labels:**
+`feature` (or `bug`, `enhancement`, etc.)
+`area-label` (e.g., `token-service`, `consensus-service`, `dex-swaps`)
+`good-first-issue` (if applicable for beginners)
+
+**Milestone:** [Milestone Name or Version Number]
+
+**DCO Requirement:**
+All commits must be DCO-signed. Please run `git commit -s`.
+
+**Assignees:** _(Optional: Assign to yourself, a lead, or leave for others to claim.)_
