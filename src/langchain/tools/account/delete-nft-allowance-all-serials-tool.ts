@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { DeleteNftAllowanceAllSerialsParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
