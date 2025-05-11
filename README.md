@@ -1,194 +1,244 @@
-# Hedera Agent Kit
+# @hashgraphonline/hedera-agent-kit
 
-Welcome to the **Hedera Agent Kit**! This project aims to provide a LangChain-compatible toolkit for interacting with the Hedera Network. The focus is on a minimal, easy-to-use set of functions, while staying flexible for future enhancements.
+Build LLM-powered applications that interact with the Hedera Network. Create conversational agents that can understand user requests in natural language and execute Hedera transactions, or build backend systems that leverage AI for on-chain operations.
 
-## Overview
+## Key Features
 
-- **Agent Interaction**: Make on-chain calls to Hedera (e.g., create tokens, post messages to consensus).
-- **Lightweight**: Designed to get you started quickly with a minimal set of features.
-- **Community-Driven**: We encourage developers of all skill levels to contribute.
+*   **Conversational Hedera**: Easily build chat-based interfaces for Hedera actions.
+*   **Flexible Transaction Handling**:
+    *   **Direct Execution**: For autonomous agents or backend control.
+    *   **Provide Bytes**: For user-centric apps where users sign with their own wallets (e.g., HashPack via WalletConnect).
+    *   **Scheduled Transactions**: Built-in support for "human-in-the-loop" workflows, where AI prepares transactions for user review and approval.
+*   **Comprehensive Toolset**: Pre-built tools for HTS, HCS, HBAR transfers, account management, files, and smart contracts.
+*   **Extensible**: Add your own custom tools with the plugin system.
+*   **Simplified SDK Interaction**: Abstracts away much of the Hedera SDK boilerplate.
 
-## Current Features
+## Installation
 
-1. **Native Hedera Token Service (HTS)**:
-    - Create fungible tokens with minimal parameters (name, symbol, decimals, supply, etc.).
-    - Mint additional tokens to existing token accounts.
+```bash
+npm install @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+# or
+yarn add @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+```
+*(Ensure you have `dotenv` for environment variable management if you use `.env` files.)*
 
-2. **Token Operations**:
-    - **Create Fungible Tokens (FT)**: Easily create and configure new fungible tokens.
-    - **Create Non-fungible Tokens (NFT)**: Easily create and configure new non-fungible tokens.
-    - **Transfer Tokens**: Transfer tokens between accounts.
-    - **Associate / Dissociate Tokens**: Associate a token to an account or dissociate it as needed.
-    - **Reject Tokens**: Reject a token from an account.
+## Quick Start: Your First Conversational Hedera Agent
 
-3. **HBAR Transactions**:
-    - Transfer HBAR between accounts.
+This example demonstrates setting up the `HederaConversationalAgent` for a user-centric scenario where the user signs scheduled transactions. The agent's operator account will pay to create the schedule, and the user's account will be set to pay for the actual scheduled transaction when it's signed and submitted by the user.
 
-4. **Airdrop Management**:
-    - Airdrop tokens to multiple recipients.
-    - Claim a pending airdrop.
+**1. Set up your `.env` file:**
 
-5. **Token Balance Queries**:
-    - Get HBAR balances of an account.
-    - Get HTS token balances for a specific token ID.
-    - Retrieve all token balances for an account.
-    - Get token holders for a specific token.
+```env
+OPENAI_API_KEY="sk-..."
+# Agent's Operator Account (pays for creating schedules)
+AGENT_OPERATOR_ID="0.0.YOUR_AGENT_OPERATOR_ID"
+AGENT_OPERATOR_KEY="your_agent_operator_private_key"
+# User's Account (will be the payer of the scheduled transaction, and signs the ScheduleSign)
+USER_ACCOUNT_ID="0.0.YOUR_USER_ACCOUNT_ID"
+```
 
-6. **Topic Management (HCS)**:
-    - **Create Topics**: Create new topics for Hedera Consensus Service (HCS).
-    - **Delete Topics**: Delete an existing topic.
-    - **Submit Topic Messages**: Send messages to a specific topic.
-    - **Get Topic Info**: Retrieve information about a specific topic.
-    - **Get Topic Messages**: Fetch messages from a specific topic.
+**2. Create `demo.ts`:**
 
-## Target Architecture Overview (Simplified Flow Diagram)
+```typescript
+import { HederaConversationalAgent, ServerSigner } from '@hashgraphonline/hedera-agent-kit';
+import { ChatOpenAI } from "@langchain/openai";
+import * as readline from 'node:readline/promises';
+import { stdin as input, stdout as output } from 'node:process';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+async function main() {
+  if (!process.env.AGENT_OPERATOR_ID || !process.env.AGENT_OPERATOR_KEY || !process.env.OPENAI_API_KEY || !process.env.USER_ACCOUNT_ID) {
+    console.error("Please ensure AGENT_OPERATOR_ID, AGENT_OPERATOR_KEY, USER_ACCOUNT_ID, and OPENAI_API_KEY are in your .env file.");
+    return;
+  }
+
+  const agentOperatorSigner = new ServerSigner(
+    process.env.AGENT_OPERATOR_ID,
+    process.env.AGENT_OPERATOR_KEY,
+    'testnet' // or 'mainnet'
+  );
+  const userAccountId = process.env.USER_ACCOUNT_ID;
+
+  const agent = new HederaConversationalAgent(agentOperatorSigner, {
+    llm: new ChatOpenAI({ modelName: "gpt-4o-mini", temperature: 0.1 }),
+    userAccountId: userAccountId,
+    operationalMode: 'provideBytes',
+    scheduleUserTransactionsInBytesMode: true,
+    verbose: false, 
+  });
+  await agent.initialize();
+
+  console.log("Hedera Agent is ready!");
+  console.log(`  Agent Operator: ${agentOperatorSigner.getAccountId()}`);
+  console.log(`  User Account: ${userAccountId}`);
+  console.log(`  Mode: provideBytes, User Txns Scheduled: true`);
+  console.log("\nExample: 'Schedule a transfer of 0.1 HBAR from my account to 0.0.123'");
+  console.log("Type 'exit' to quit.\n");
+
+  const rl = readline.createInterface({ input, output });
+  const chatHistory: { type: string, content: string }[] = [];
+  let lastScheduleId: string | null = null;
+
+  while (true) {
+    const userInput = await rl.question('You: ');
+    if (userInput.toLowerCase() === 'exit') {
+      rl.close();
+      break;
+    }
+
+    chatHistory.push({ type: 'human', content: userInput });
+    let agentResponse = await agent.processMessage(userInput, chatHistory);
+    console.log(`Agent: ${agentResponse.output}`);
+    chatHistory.push({ type: 'ai', content: agentResponse.output });
+
+    if (agentResponse.scheduleId) {
+      lastScheduleId = agentResponse.scheduleId.toString();
+      console.log(`SYSTEM: Transaction was scheduled. Schedule ID: ${lastScheduleId}`);
+      const confirmSign = await rl.question(`SYSTEM: Prepare transaction to sign for schedule ${lastScheduleId}? (yes/no) > `);
+      
+      if (confirmSign.toLowerCase() === 'yes') {
+        const signPrompt = `Yes, prepare to sign schedule ${lastScheduleId} using my account.`;
+        chatHistory.push({ type: 'human', content: signPrompt });
+        agentResponse = await agent.processMessage(signPrompt, chatHistory);
+        console.log(`Agent: ${agentResponse.output}`);
+        chatHistory.push({ type: 'ai', content: agentResponse.output });
+      } else {
+        console.log("SYSTEM: OK. You can ask to sign it later using the Schedule ID.");
+        lastScheduleId = null; 
+      }
+    }
+
+    if (agentResponse.transactionBytes) {
+      console.log(`SYSTEM: Transaction bytes for account ${userAccountId} to sign and submit:`);
+      console.log(agentResponse.transactionBytes);
+      console.log("SYSTEM: (In a real app, pass these to a wallet for signing and submission.)");
+      lastScheduleId = null; 
+    }
+    
+    if (chatHistory.length > 10) chatHistory.splice(0, chatHistory.length - 10); // Keep history trimmed
+  }
+}
+
+main().catch(console.error);
+```
+
+**3. Run the demo:**
+
+```bash
+npm install -g tsx # If you don't have tsx installed globally
+tsx demo.ts
+```
+
+**Example Interaction:**
+
+```
+You: Schedule a transfer of 0.1 HBAR from my account to 0.0.34567
+Agent: Okay, I have scheduled a transfer of 0.1 HBAR from your account (0.0.USER_ACCOUNT_ID) to 0.0.34567. The Schedule ID is 0.0.xxxxxx.
+SYSTEM: Transaction was scheduled. Schedule ID: 0.0.xxxxxx
+SYSTEM: Prepare transaction to sign for schedule 0.0.xxxxxx? (yes/no) > yes
+You: Yes, prepare to sign schedule 0.0.xxxxxx using my account.
+Agent: Alright, I have prepared the ScheduleSign transaction for you. Please use the following transaction bytes to sign and submit it with your account (0.0.USER_ACCOUNT_ID).
+SYSTEM: Transaction bytes for account 0.0.USER_ACCOUNT_ID to sign and submit:
+[Transaction Bytes Output Here]
+SYSTEM: (In a real app, pass these to a wallet for signing and submission.)
+```
+
+## Core Concepts
+
+Understanding these concepts will help you make the most of the Hedera Agent Kit:
+
+*   **`HederaConversationalAgent`**: The primary interface for building chat-based applications. It combines the power of an LLM with the Hedera-specific tools provided by `HederaAgentKit`.
+*   **`HederaAgentKit`**: The core engine that bundles tools, manages network clients, and holds the `signer` configuration. It's used internally by `HederaConversationalAgent` but can also be used directly for more programmatic control.
+*   **Signers (`AbstractSigner`)**: Determine how transactions are signed and paid for:
+    *   `ServerSigner`: Holds a private key directly. Useful for backend agents where the agent's account pays for transactions it executes.
+    *   `BrowserSigner` (Conceptual for this README): Represents integrating with a user's browser wallet (e.g., HashPack). The agent prepares transaction bytes, and the user signs and submits them via their wallet.
+*   **Operational Modes**: Configure how the agent handles transactions:
+    *   `operationalMode: 'directExecution'`: Agent signs and submits all transactions using its `signer`. The agent's operator account pays.
+    *   `operationalMode: 'provideBytes'`: Agent returns transaction bytes. Your application (and the user, via their wallet) is responsible for signing and submitting. This is key for user-centric apps.
+    *   `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'provideBytes'`, this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer *my* HBAR..."). The agent's operator pays to *create the schedule entity*, and the user pays for the *actual scheduled transaction* when they sign the `ScheduleSignTransaction`.
+    *   `metaOptions: { schedule: true }`: Allows the LLM to explicitly request scheduling for any tool call, overriding defaults.
+*   **Human-in-the-Loop Flow**: The Quick Start example demonstrates this. The agent first creates a schedule (agent pays). Then, after user confirmation, it prepares a `ScheduleSignTransaction` (user pays to sign and submit this, triggering the original scheduled transaction).
+
+## Available Tools
+
+(Previously generated list of tools will be inserted here - keeping it concise for now)
+
+**Account Service Tools:**
+*   `hedera-account-transfer-hbar`, `hedera-account-create`, `hedera-sign-and-execute-scheduled-transaction`, etc.
+
+**HTS Tools:**
+*   `hedera-hts-create-fungible-token`, `hedera-hts-mint-nft`, etc.
+
+**HCS, File, Smart Contract Tools:**
+*   (List major tools for each service)
+
+*(A more detailed tool reference can be found at [LINK TO TOOL DOCS - TBD])* 
+
+## Advanced Usage
+
+### Using `HederaAgentKit` Directly
+
+```typescript
+import { HederaAgentKit, ServerSigner, Hbar } from '@hashgraphonline/hedera-agent-kit';
+// Ensure Hbar is also exported from the main package index if not already
+
+async function useKitDirectly() {
+  const signer = new ServerSigner(process.env.AGENT_OPERATOR_ID!, process.env.AGENT_OPERATOR_KEY!, 'testnet');
+  const kit = new HederaAgentKit(signer, undefined, 'directExecution'); 
+  await kit.initialize();
+
+  const transferParams = {
+    transfers: [
+      { accountId: '0.0.SOME_RECIPIENT', amount: new Hbar(1) },
+      { accountId: signer.getAccountId().toString(), amount: new Hbar(-1) }
+    ],
+    memo: 'Direct kit HBAR transfer'
+  };
+  const result = await kit.accounts().transferHbar(transferParams).execute();
+  console.log('Direct HBAR Transfer Result:', result);
+}
+// useKitDirectly();
+```
+
+### Plugin System
+
+(Existing content can be kept and slightly condensed if needed)
+
+## Mermaid Diagram: Agent Interaction Flow
 
 ```mermaid
 graph TD;
-    UserInput["Human User (Provides Prompt)"] --> LangChainApp["LangChain Application / Runtime"];
-    LangChainApp --> LangChainAgent["LangChain Agent (LLM + ReAct Logic)"];
-
-    subgraph AppDevSetup ["SDK & Agent Initialization"]
-        direction TB
-        AppDevCode["Application Setup Code"]
-        CreatedSigner["Signer Instance (Server or Browser)"]
-        PluginConfigIn["Plugin Configuration (paths/packages)"]
-        InitializedKit["HederaAgentKit Instance (with Signer, Plugins Loaded, Tools Aggregated)"]
-        AggregatedToolsOut["Aggregated LangChain Tools (from kit.getAggregatedTools())"]
-        ConfiguredLCAgent["Configured LangChain AgentExecutor"]
-
-        AppDevCode --> CreatedSigner;
-        AppDevCode -- "Provides" --> PluginConfigIn;
-        AppDevCode -- "new HederaAgentKit(CreatedSigner, PluginConfigIn)" --> InitializedKit;
-        AppDevCode -- "kit.getAggregatedLangChainTools()" --> AggregatedToolsOut;
-        AppDevCode -- "new AgentExecutor({tools: AggregatedToolsOut})" --> ConfiguredLCAgent;
+    UserInput["User via Application UI"] --> AppCode["Application Logic (e.g., demo.ts)"];
+    AppCode -- "Sends user prompt to" --> ConversationalAgent["HederaConversationalAgent"];
+    
+    subgraph AgentCore ["HederaConversationalAgent Internals"]
+        ConversationalAgent -- "Manages" --> LLM["LLM (e.g., GPT-4o)"];
+        ConversationalAgent -- "Uses" --> AgentKit["HederaAgentKit Instance"];
+        LLM -- "Decides to use a tool" --> Tools[Aggregated LangChain Tools];
     end
 
-    LangChainAgent -- "Uses" --> ConfiguredLCAgent;
+    AgentKit -- "Provides tools to" --> Tools;
+    AgentKit -- "Configured with" --> Signer["AbstractSigner (ServerSigner/BrowserSigner)"];
+    AgentKit -- "Configured with" --> OpModes["Operational Modes"];
 
-    subgraph ToolDevAndExecution ["LangChain Tool Developer & Execution Flow"]
-        direction TB
-        LCTool["LangChain Tool (Core SDK or Plugin Tool)"];
-        ToolReceivesKit["Tool has access to HederaAgentKit instance"];
-        ToolGetsBuilder["Tool calls kit.service().transactionMethod(params)"];
-        BuilderInstance["ServiceBuilder Instance with Current Transaction Set"];
-        ToolConfiguresBuilder["Tool calls builder.setTransactionMemo() etc. (optional)"];
-        ToolActionCall["Tool calls builder.execute() or .getBytes()"];
+    Tools -- "Calls e.g., kit.accounts()" --> AgentKit;
+    Tools -- "Invokes e.g., accountBuilder.prepareTransferHbar()" --> ServiceBuilders["Service Builders (AccountBuilder, etc.)"];
+    ServiceBuilders -- "Prepares SDK Transaction" --> SDKTx["@hashgraph/sdk Transaction"];
 
-        ConfiguredLCAgent -- "Invokes Selected Tool" --> LCTool;
-        LCTool --> ToolReceivesKit;
-        ToolReceivesKit --> ToolGetsBuilder;
-        ToolGetsBuilder --> BuilderInstance;
-        BuilderInstance --> ToolConfiguresBuilder;
-        ToolConfiguresBuilder --> ToolActionCall;
+    subgraph ExecutionPath ["Transaction Execution / Byte Generation"]
+        ServiceBuilders -- "Based on OpModes & Tool Logic" --> DecisionPoint["Execute or GetBytes?"];
+        DecisionPoint -- "Execute (Agent Pays/Signs via ServerSigner)" --> Signer;
+        DecisionPoint -- "ProvideBytes (User Pays/Signs)" --> TxBytes["Transaction Bytes"];
+        DecisionPoint -- "Schedule (Agent Pays for CreateSchedule)" --> Signer;
+        TxBytes -- "Returned to AppCode --> User Wallet" --> UserWallet["User Wallet (HashPack, etc)"];
+        Signer -- "Uses SDK Client" --> HederaNetwork["Hedera Network"];
+        UserWallet -- "Submits to" --> HederaNetwork;
     end
-
-    subgraph SDKInternalExecution ["Execution"]
-        direction TB
-        SignerInterface["AbstractSigner (Interface)"];
-        HederaSDK["@hashgraph/sdk"];
-        TransactionBytes["Transaction Bytes (string)"];
-
-        ToolActionCall -- "If execute(), calls" --> SignerInterface;
-        ToolActionCall -- "If getBytes(), uses" --> HederaSDK;
-        SignerInterface -- "signAndExecuteTransaction() uses" --> HederaSDK;
-        HederaSDK -- "Generates" --> TransactionBytes;
-    end
-
-    subgraph SignerImplementationsLayer ["Signer Implementations"]
-        direction TB
-        ServerSignerImp["ServerSigner"] -- "Implements" -->SignerInterface;
-        BrowserSignerImp["BrowserSigner"] -- "Implements" --> SignerInterface;
-    end
-
-    subgraph NetworkAndWallet ["Hedera Network & Wallet Interaction"]
-        direction TB
-        HederaNetwork["Hedera Network (Consensus Nodes)"];
-        UserWallet["User Wallet (e.g., HashPack via WalletConnect)"];
-
-        HederaSDK -- "(via ServerSigner) interacts with" --> HederaNetwork;
-        BrowserSignerImp -- "Delegates signing to" --> UserWallet;
-        UserWallet -- "Signs & Submits to" --> HederaNetwork;
-    end
-
-    subgraph InternalPluginSystem ["Internal Plugin System "]
-        direction TB
-        InitializedKit -- "Contains & Initializes" -->InternalPluginManager["PluginManager"];
-        InternalPluginManager -- "Uses PluginLoader from @hgonline/standards-agent-kit" -->InternalPluginLoader["PluginLoader"];
-        InternalPluginLoader -- "Loads" -->InternalUserPlugins["User Custom Plugins"];
-        InternalUserPlugins -- "Provide tools to" -->InternalPluginManager;
-        InternalPluginManager -- "Supplies Plugin Tools to Kit for Aggregation" --> InitializedKit;
-    end
-
-    subgraph Querying ["Querying Utilities"]
-        InitializedKit -- "For Queries uses" --> MirrorClient["MirrorNodeClient"];
-        MirrorClient -- "Queries" --> MirrorAPIExternal["Hedera Mirror Node API"];
-    end
-
 ```
 
-**Diagram Flow Explanation (Developer UX Focus):**
-
-- **Phase 1: Application Setup (Done Once by App Developer)**
-
-  1.  The application developer creates a `signer` (`ServerSigner` or `BrowserSigner`).
-  2.  They define `pluginConfig` (listing plugin paths/packages for custom tools).
-  3.  They instantiate `HederaAgentKit` with this `signer` and `pluginConfig`.
-      - During `HederaAgentKit` construction, its internal `PluginManager` is created. This `PluginManager` is responsible for using the `PluginLoader` from `@hashgraphonline/standards-agent-kit` to load plugins based on the `pluginConfig`.
-      - The `HederaAgentKit`'s `async initialize()` method must then be called. This method completes plugin initialization (by calling `pluginManager.initializePlugins()`) and then aggregates all tools: its own core tools, HCS10 tools (if applicable), and all tools from the now-loaded plugins.
-  4.  The developer then calls `const allTools = kit.getAggregatedLangChainTools();` to retrieve this combined list.
-  5.  These `allTools` are used to configure the main LangChain AgentExecutor.
-
-- **Phase 2: LangChain Agent & Tool Operation (For Each User Prompt)**
-
-  1.  User prompts LangChain App, which invokes Agent.
-  2.  Agent selects a Tool.
-  3.  The Tool's `_call` method uses its `HederaAgentKit` instance (obtained via constructor or `PluginContext`) to get a service builder: `const hcsBuilder = this.kit.hcs();`.
-  4.  The Tool then calls a method on the service builder to specify the transaction and its main parameters: `hcsBuilder.createTopic(params);`.
-  5.  Optionally, further common configurations can be chained: `hcsBuilder.setTransactionMemo("My Memo");`.
-  6.  Finally, the Tool calls `await hcsBuilder.execute()` or `await hcsBuilder.getTransactionBytes()`.
-
-- **Phase 3: SDK Internal Action & Hedera Interaction:**
-  - `builder.execute()`: The builder constructs the transaction and uses `this.signer.signAndExecuteTransaction()`.
-  - `builder.getTransactionBytes()`: The builder constructs the transaction using `@hashgraph/sdk` and serializes it.
-  - The specific `signer` implementation then handles interaction with the Hedera network.
-
-This flow makes `HederaAgentKit` a self-contained unit that, once initialized, provides everything needed, including all aggregated tools, through its own API.
-
-
-### Note
-The methods in the HederaAgentKit class are fully implemented and functional for interacting with the Hedera network (e.g., creating tokens, transferring assets, managing airdrops). However, Langchain tools for most of these methods and operations are not implemented by default.
-
-### Details
-For further details check [HederaAgentKit Readme](./src/agent/README.md).
-
-## Getting Started
-
-```bash
-npm i hedera-agent-kit
-```
-
-LangChain/ LangGraph quick start:
-
-```js
-import { HederaAgentKit, createHederaTools } from 'hedera-agent-kit';
-import { ToolNode } from '@langchain/langgraph/prebuilt';
-
-const hederaAgentKit = new HederaAgentKit(
-  '0.0.12345', // Replace with your account ID
-  '0x.......', // Replace with your private key
-  'testnet',   // Replace with your selected network
-);
-const hederaAgentKitTools = createHederaTools(hederaAgentKit);
-const toolsNode = new ToolNode(tools);
-
-```
-- `hederaAgentKitTools` is an array of `Tool` instances
-  (from `@langchain/core/tools`).
-- `toolsNode` can be used in any LangGraph workflow,
-  for example `workflow.addNode('toolsNode', toolsNode)`.
-
-## Local development
+## Local Development
 
 1. **Clone** the repo:
 
@@ -214,7 +264,6 @@ npm install
 ## Contributing
 
 We welcome contributions! Please see our [CONTRIBUTING.md](https://github.com/hedera-dev/hedera-agent-kit/blob/main/CONTRIBUTING.md) for details on our process, how to get started, and how to sign your commits under the DCO.
-
 
 ## License
 
