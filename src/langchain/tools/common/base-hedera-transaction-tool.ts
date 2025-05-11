@@ -7,6 +7,9 @@ import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 import { AccountId, Key, TransactionId } from '@hashgraph/sdk';
 import { parseKey } from '../../../utils/key-utils';
 
+/**
+ * Zod schema for transaction meta options that can be used with any Hedera transaction tool.
+ */
 export const HederaTransactionMetaOptionsSchema = z
   .object({
     transactionMemo: z
@@ -31,7 +34,6 @@ export const HederaTransactionMetaOptionsSchema = z
       .describe(
         'Set to true to schedule the transaction. If true, output will be for a ScheduleCreate transaction.'
       ),
-
     scheduleMemo: z
       .string()
       .optional()
@@ -55,16 +57,35 @@ export type HederaTransactionMetaOptions = z.infer<
   typeof HederaTransactionMetaOptionsSchema
 >;
 
+/**
+ * Parameters required to initialize a BaseHederaTransactionTool.
+ */
 export interface BaseHederaTransactionToolParams extends ToolParams {
   hederaKit: HederaAgentKit;
   logger?: StandardsSdkLogger;
 }
 
+/**
+ * Schedule options used when executing transactions.
+ */
+interface ScheduleExecutionOptions {
+  schedule?: boolean;
+  scheduleMemo?: string;
+  schedulePayerAccountId?: string | AccountId;
+  scheduleAdminKey?: Key;
+}
+
+/**
+ * Base class for all Hedera transaction tools.
+ * Handles common transaction processing logic across different tool types.
+ *
+ * @template S - The Zod schema that defines the input parameters for the specific tool
+ */
 export abstract class BaseHederaTransactionTool<
-  //@ts-ignore
-  S extends z.ZodObject<any, any, any, any, any>
+  //@ts-ignore: Ignoring complex type compatibility issues
+  S extends z.ZodObject<any, any, any, any>
 > extends StructuredTool<
-  //@ts-ignore
+  //@ts-ignore: Ignoring complex type compatibility issues
   z.ZodObject<
     S['shape'] & { metaOptions: typeof HederaTransactionMetaOptionsSchema },
     any,
@@ -79,9 +100,9 @@ export abstract class BaseHederaTransactionTool<
 
   abstract specificInputSchema: S;
 
-  //@ts-ignore
+  //@ts-ignore: Ignoring complex type compatibility issues
   get schema(): this['lc_kwargs']['schema'] {
-    //@ts-ignore
+    //@ts-ignore: Ignoring complex type compatibility issues
     return this.specificInputSchema.extend({
       metaOptions: HederaTransactionMetaOptionsSchema,
     });
@@ -93,20 +114,39 @@ export abstract class BaseHederaTransactionTool<
     this.logger = logger || hederaKit.logger;
   }
 
+  /**
+   * Get the appropriate service builder for this tool's operations.
+   */
   protected abstract getServiceBuilder(): BaseServiceBuilder;
 
+  /**
+   * Call the appropriate builder method with the tool-specific arguments.
+   */
   protected abstract callBuilderMethod(
     builder: BaseServiceBuilder,
     specificArgs: z.infer<S>,
     runManager?: CallbackManagerForToolRun
   ): Promise<void>;
 
+  /**
+   * Apply any meta options specified in the tool call to the service builder.
+   */
   protected async _applyMetaOptions(
     builder: BaseServiceBuilder,
     args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
     specificCallArgs: z.infer<S>
   ): Promise<void> {
-    const keyFieldsToPotentiallySubstitute: (keyof typeof specificCallArgs)[] = [
+    await this._substituteKeyFields(specificCallArgs);
+    this._applyTransactionOptions(builder, args.metaOptions);
+  }
+
+  /**
+   * Handle substitution of special key field values like 'current_signer'
+   */
+  private async _substituteKeyFields(
+    specificCallArgs: z.infer<S>
+  ): Promise<void> {
+    const keyFieldNames: (keyof typeof specificCallArgs)[] = [
       'adminKey',
       'kycKey',
       'freezeKey',
@@ -116,7 +156,7 @@ export abstract class BaseHederaTransactionTool<
       'pauseKey',
     ];
 
-    for (const keyField of keyFieldsToPotentiallySubstitute) {
+    for (const keyField of keyFieldNames) {
       const originalKeyValue = (specificCallArgs as any)[keyField];
 
       if (originalKeyValue === 'current_signer') {
@@ -125,34 +165,48 @@ export abstract class BaseHederaTransactionTool<
           const pubKeyString = operatorPubKey.toStringDer();
           (specificCallArgs as any)[keyField] = pubKeyString;
           this.logger.info(
-            `Substituted ${keyField as string} with current signer's public key.`
+            `Substituted ${
+              keyField as string
+            } with current signer's public key.`
           );
-        } catch (e: unknown) {
-          const error = e as Error;
+        } catch (error) {
+          const typedError = error as Error;
           this.logger.error(
-            `Failed to get current signer's public key for ${keyField as string} substitution: ${error.message}`,
+            `Failed to get current signer's public key for ${
+              keyField as string
+            } substitution: ${typedError.message}`,
             error
           );
         }
       }
     }
+  }
 
-    if (args.metaOptions?.transactionId) {
+  /**
+   * Apply transaction-specific options from metaOptions
+   */
+  private _applyTransactionOptions(
+    builder: BaseServiceBuilder,
+    metaOptions?: HederaTransactionMetaOptions
+  ): void {
+    if (!metaOptions) return;
+
+    if (metaOptions.transactionId) {
       try {
         builder.setTransactionId(
-          TransactionId.fromString(args.metaOptions.transactionId)
+          TransactionId.fromString(metaOptions.transactionId)
         );
       } catch {
         this.logger.warn(
-          `Invalid transactionId format in metaOptions: ${args.metaOptions.transactionId}, ignoring.`
+          `Invalid transactionId format in metaOptions: ${metaOptions.transactionId}, ignoring.`
         );
       }
     }
 
-    if (args.metaOptions?.nodeAccountIds?.length > 0) {
+    if (metaOptions.nodeAccountIds && metaOptions.nodeAccountIds.length > 0) {
       try {
         builder.setNodeAccountIds(
-          args.metaOptions.nodeAccountIds.map((id: string) =>
+          metaOptions.nodeAccountIds.map((id: string) =>
             AccountId.fromString(id)
           )
         );
@@ -163,136 +217,164 @@ export abstract class BaseHederaTransactionTool<
       }
     }
 
-    if (args.metaOptions?.transactionMemo) {
-      builder.setTransactionMemo(args.metaOptions.transactionMemo);
+    if (metaOptions.transactionMemo) {
+      builder.setTransactionMemo(metaOptions.transactionMemo);
     }
   }
 
+  /**
+   * Handle direct execution mode for the transaction
+   */
   private async _handleDirectExecution(
     builder: BaseServiceBuilder,
     args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
   ): Promise<string> {
-    const execOptions: {
-      schedule?: boolean;
-      scheduleMemo?: string;
-      schedulePayerAccountId?: string | AccountId;
-      scheduleAdminKey?: Key;
-    } = {};
+    const execOptions = this._buildScheduleOptions(args.metaOptions);
 
-    execOptions.schedule = args.metaOptions?.schedule;
-    if (execOptions.schedule) {
-      if (args?.metaOptions?.scheduleMemo) {
-        execOptions.scheduleMemo = args.metaOptions.scheduleMemo;
+    this.logger.info(
+      `Executing transaction directly (mode: directExecution): ${this.name}`
+    );
+
+    const result = await builder.execute(execOptions);
+    return JSON.stringify(result);
+  }
+
+  /**
+   * Handle providing transaction bytes mode
+   */
+  private async _handleProvideBytes(
+    builder: BaseServiceBuilder,
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  ): Promise<string> {
+    const shouldSchedule = this._shouldScheduleTransaction(args.metaOptions);
+
+    if (shouldSchedule) {
+      return this._handleScheduledTransaction(builder, args);
+    } else {
+      return this._handleUnscheduledTransaction(builder);
+    }
+  }
+
+  /**
+   * Determine if a transaction should be scheduled
+   */
+  private _shouldScheduleTransaction(
+    metaOptions?: HederaTransactionMetaOptions
+  ): boolean {
+    return (
+      !this.neverScheduleThisTool &&
+      (metaOptions?.schedule ??
+        (this.hederaKit.operationalMode === 'provideBytes' &&
+          this.hederaKit.scheduleUserTransactionsInBytesMode))
+    );
+  }
+
+  /**
+   * Handle creating a scheduled transaction
+   */
+  private async _handleScheduledTransaction(
+    builder: BaseServiceBuilder,
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  ): Promise<string> {
+    this.logger.info(
+      `Preparing scheduled transaction (mode: provideBytes, schedule: true): ${this.name}`
+    );
+
+    const execOptions = this._buildScheduleOptions(args.metaOptions, true);
+    execOptions.schedulePayerAccountId = this.hederaKit.signer.getAccountId();
+
+    const scheduleCreateResult = await builder.execute(execOptions);
+
+    if (scheduleCreateResult.success && scheduleCreateResult.scheduleId) {
+      const description =
+        args.metaOptions?.transactionMemo ||
+        `Scheduled ${this.name} operation.`;
+
+      const userInfo = this.hederaKit.userAccountId
+        ? ` User (${this.hederaKit.userAccountId}) will be payer of scheduled transaction.`
+        : '';
+
+      return JSON.stringify({
+        success: true,
+        op: 'schedule_create',
+        schedule_id: scheduleCreateResult.scheduleId.toString(),
+        description: description + userInfo,
+        payer_account_id_scheduled_tx:
+          this.hederaKit.userAccountId || 'unknown',
+        memo_scheduled_tx: args.metaOptions?.transactionMemo,
+      });
+    } else {
+      return JSON.stringify({
+        success: false,
+        error:
+          scheduleCreateResult.error ||
+          'Failed to create schedule and retrieve ID.',
+      });
+    }
+  }
+
+  /**
+   * Handle returning transaction bytes for an unscheduled transaction
+   */
+  private async _handleUnscheduledTransaction(
+    builder: BaseServiceBuilder
+  ): Promise<string> {
+    this.logger.info(
+      `Returning transaction bytes (mode: provideBytes, schedule: false): ${this.name}`
+    );
+
+    const bytes = await builder.getTransactionBytes({});
+    return JSON.stringify({
+      success: true,
+      transactionBytes: bytes,
+      transactionId: builder.getCurrentTransaction()?.transactionId?.toString(),
+    });
+  }
+
+  /**
+   * Build schedule options from meta options
+   */
+  private _buildScheduleOptions(
+    metaOptions?: HederaTransactionMetaOptions,
+    forceSchedule = false
+  ): ScheduleExecutionOptions {
+    const options: ScheduleExecutionOptions = {};
+
+    if (forceSchedule || metaOptions?.schedule) {
+      options.schedule = true;
+
+      if (metaOptions?.scheduleMemo) {
+        options.scheduleMemo = metaOptions.scheduleMemo;
       }
-      if (args?.metaOptions?.schedulePayerAccountId) {
+
+      if (metaOptions?.schedulePayerAccountId) {
         try {
-          execOptions.schedulePayerAccountId = AccountId.fromString(
-            args.metaOptions.schedulePayerAccountId
+          options.schedulePayerAccountId = AccountId.fromString(
+            metaOptions.schedulePayerAccountId
           );
         } catch {
           this.logger.warn('Invalid schedulePayerAccountId');
         }
       }
-      if (args?.metaOptions?.scheduleAdminKey) {
+
+      if (metaOptions?.scheduleAdminKey) {
         try {
-          const parsedKey = parseKey(args.metaOptions.scheduleAdminKey);
-          if (parsedKey) execOptions.scheduleAdminKey = parsedKey;
+          const parsedKey = parseKey(metaOptions.scheduleAdminKey);
+          if (parsedKey) options.scheduleAdminKey = parsedKey;
         } catch {
           this.logger.warn('Invalid scheduleAdminKey');
         }
       }
     }
-    this.logger.info(
-      `Executing transaction directly (mode: directExecution): ${this.name}`
-    );
-    const result = await builder.execute(execOptions);
-    return JSON.stringify(result);
+
+    return options;
   }
 
-  private async _handleProvideBytes(
-    builder: BaseServiceBuilder,
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
-  ): Promise<string> {
-    const execOptions: {
-      schedule?: boolean;
-      scheduleMemo?: string;
-      schedulePayerAccountId?: string | AccountId;
-      scheduleAdminKey?: Key;
-    } = {};
-
-    const shouldSchedule =
-      !this.neverScheduleThisTool &&
-      (args.metaOptions?.schedule ??
-        (this.hederaKit.operationalMode === 'provideBytes' &&
-          this.hederaKit.scheduleUserTransactionsInBytesMode));
-
-    if (shouldSchedule) {
-      this.logger.info(
-        `Preparing scheduled transaction (mode: provideBytes, schedule: true): ${this.name}`
-      );
-      execOptions.schedule = true;
-      if (args?.metaOptions?.scheduleMemo) {
-        execOptions.scheduleMemo = args.metaOptions.scheduleMemo;
-      }
-      execOptions.schedulePayerAccountId =
-        this.hederaKit.signer.getAccountId();
-      if (args?.metaOptions?.scheduleAdminKey) {
-        try {
-          const parsedKey = parseKey(
-            args.metaOptions.scheduleAdminKey as string
-          );
-          if (parsedKey) execOptions.scheduleAdminKey = parsedKey;
-        } catch (e: unknown) {
-          this.logger.warn(
-            `Invalid scheduleAdminKey in metaOptions: ${
-              (e as Error).message
-            }`
-          );
-        }
-      }
-
-      const scheduleCreateResult = await builder.execute(execOptions);
-
-      if (scheduleCreateResult.success && scheduleCreateResult.scheduleId) {
-        const description =
-          args.metaOptions?.transactionMemo ||
-          `Scheduled ${this.name} operation.`;
-        return JSON.stringify({
-          success: true,
-          op: 'schedule_create',
-          schedule_id: scheduleCreateResult.scheduleId.toString(),
-          description:
-            description +
-            (this.hederaKit.userAccountId
-              ? ` User (${this.hederaKit.userAccountId}) will be payer of scheduled transaction.`
-              : ''),
-          payer_account_id_scheduled_tx:
-            this.hederaKit.userAccountId || 'unknown',
-          memo_scheduled_tx: args.metaOptions?.transactionMemo,
-        });
-      } else {
-        return JSON.stringify({
-          success: false,
-          error:
-            scheduleCreateResult.error ||
-            'Failed to create schedule and retrieve ID.',
-        });
-      }
-    } else {
-      this.logger.info(
-        `Returning transaction bytes (mode: provideBytes, schedule: false): ${this.name}`
-      );
-      const bytes = await builder.getTransactionBytes({});
-      return JSON.stringify({
-        success: true,
-        transactionBytes: bytes,
-        transactionId: builder
-          .getCurrentTransaction()
-          ?.transactionId?.toString(),
-      });
-    }
-  }
-
+  /**
+   * Main method called when the tool is executed.
+   * Processes arguments, calls the specific builder method, and handles
+   * transaction execution based on the kit's operational mode.
+   */
   protected async _call(
     args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
     runManager?: CallbackManagerForToolRun
@@ -306,29 +388,42 @@ export abstract class BaseHederaTransactionTool<
 
     try {
       const builder = this.getServiceBuilder();
-      const specificCallArgs = { ...args };
-      if ('metaOptions' in specificCallArgs) {
-        delete (specificCallArgs as any).metaOptions;
-      }
+      const specificCallArgs = this._extractSpecificArgs(args);
 
-      await this._applyMetaOptions(builder, args, specificCallArgs as z.infer<S>);
-
-      await this.callBuilderMethod(
-        builder,
-        specificCallArgs as z.infer<S>,
-        runManager
-      );
+      await this._applyMetaOptions(builder, args, specificCallArgs);
+      await this.callBuilderMethod(builder, specificCallArgs, runManager);
 
       if (this.hederaKit.operationalMode === 'directExecution') {
         return this._handleDirectExecution(builder, args);
       } else {
         return this._handleProvideBytes(builder, args);
       }
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : JSON.stringify(error);
-      this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
-      return JSON.stringify({ success: false, error: errorMessage });
+    } catch (error) {
+      return this._handleError(error);
     }
+  }
+
+  /**
+   * Extract tool-specific arguments (without metaOptions)
+   */
+  private _extractSpecificArgs(
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  ): z.infer<S> {
+    const specificCallArgs = { ...args };
+    if ('metaOptions' in specificCallArgs) {
+      delete (specificCallArgs as any).metaOptions;
+    }
+    return specificCallArgs as z.infer<S>;
+  }
+
+  /**
+   * Handle errors in a consistent format
+   */
+  private _handleError(error: unknown): string {
+    const errorMessage =
+      error instanceof Error ? error.message : JSON.stringify(error);
+
+    this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
+    return JSON.stringify({ success: false, error: errorMessage });
   }
 }

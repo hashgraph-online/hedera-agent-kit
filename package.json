@@ -1,5 +1,5 @@
 {
-  "name": "@hashgraphonline/agent-kit",
+  "name": "@hashgraphonline/hedera-agent-kit",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/node/index.cjs",
