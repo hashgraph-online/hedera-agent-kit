@@ -116,9 +116,196 @@ Understanding these concepts will help you make the most of the Hedera Agent Kit
 *   **Operational Modes**: Configure how the agent handles transactions:
     *   `operationalMode: 'directExecution'`: Agent signs and submits all transactions using its `signer`. The agent's operator account pays.
     *   `operationalMode: 'provideBytes'`: Agent returns transaction bytes. Your application (and the user, via their wallet) is responsible for signing and submitting. This is key for user-centric apps.
-    *   `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'provideBytes'`, this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer *my* HBAR..."). The agent's operator pays to *create the schedule entity*, and the user pays for the *actual scheduled transaction* when they sign the `ScheduleSignTransaction`.
+    *   `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'provideBytes'`, this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer *my* HBAR..."). The agent's operator account pays to *create the schedule entity*, and the user pays for the *actual scheduled transaction* when they sign the `ScheduleSignTransaction`.
     *   `metaOptions: { schedule: true }`: Allows the LLM to explicitly request scheduling for any tool call, overriding defaults.
 *   **Human-in-the-Loop Flow**: The Quick Start example demonstrates this. The agent first creates a schedule (agent pays). Then, after user confirmation, it prepares a `ScheduleSignTransaction` (user pays to sign and submit this, triggering the original scheduled transaction).
+
+## Handling User Prompts
+
+When building applications with `HederaConversationalAgent`, it's important to establish a proper flow for handling user prompts and agent responses. This section explains how to process user inputs, manage conversation history, and handle the various response types from the agent.
+
+### Processing User Prompts
+
+To send a user's message to the agent and receive a response:
+
+```typescript
+// Initialize the agent as shown in the Quick Start example
+const conversationalAgent = new HederaConversationalAgent(agentSigner, {
+  operationalMode: 'provideBytes',
+  userAccountId: userAccountId,
+  openAIApiKey: openaiApiKey
+});
+await conversationalAgent.initialize();
+
+// Create a chat history array to maintain conversation context
+const chatHistory: Array<{ type: 'human' | 'ai'; content: string }> = [];
+
+// Process a user message
+async function handleUserMessage(userInput: string) {
+  // Add the user's message to chat history
+  chatHistory.push({ type: 'human', content: userInput });
+  
+  // Process the message using the agent
+  const agentResponse = await conversationalAgent.processMessage(userInput, chatHistory);
+  
+  // Add the agent's response to chat history
+  chatHistory.push({ type: 'ai', content: agentResponse.output });
+  
+  // Return the full response to handle any transaction data
+  return agentResponse;
+}
+```
+
+### Understanding Agent Responses
+
+The `processMessage` method returns an `AgentResponse` object with these key properties:
+
+```typescript
+interface AgentResponse {
+  output: string;                // The text response to show to the user
+  transactionBytes?: string;     // Base64-encoded transaction bytes (when in 'provideBytes' mode)
+  scheduleId?: ScheduleId;       // The schedule ID when a transaction was scheduled
+  error?: string;                // Error message if something went wrong
+}
+```
+
+### Handling Different Response Types
+
+Depending on your operational mode, you'll need to handle different response types:
+
+#### 1. Text-only Responses
+
+Simple informational responses require no special handling:
+
+```typescript
+const response = await handleUserMessage("What's my HBAR balance?");
+console.log(response.output); // Display to the user
+```
+
+#### 2. Transaction Bytes (provideBytes mode)
+
+When the agent generates transaction bytes, you'll need to present them to the user for signing:
+
+```typescript
+const response = await handleUserMessage("Transfer 10 HBAR to 0.0.12345");
+
+if (response.transactionBytes) {
+  // Option 1: Connect to HashPack or other wallet
+  const signedTxResponse = await hashConnect.signTransaction(response.transactionBytes);
+  
+  // Option 2: If you have the user's key in your app
+  const userSigner = new ServerSigner(userAccountId, userPrivateKey, network);
+  const txBytes = Buffer.from(response.transactionBytes, 'base64');
+  const transaction = Transaction.fromBytes(txBytes);
+  const signedTx = await transaction.sign(userSigner.getOperatorPrivateKey());
+  const txResponse = await signedTx.execute(userSigner.getClient());
+}
+```
+
+#### 3. Schedule IDs (scheduled transactions)
+
+When the agent creates a scheduled transaction:
+
+```typescript
+const response = await handleUserMessage("Schedule a transfer of 5 HBAR from my account to 0.0.12345");
+
+if (response.scheduleId) {
+  const scheduleIdStr = response.scheduleId.toString();
+  console.log(`Transaction scheduled with ID: ${scheduleIdStr}`);
+  
+  // Ask the user if they want to sign the scheduled transaction
+  const userWantsToSign = await askUserForConfirmation();
+  
+  if (userWantsToSign) {
+    // Ask the agent to prepare the ScheduleSign transaction
+    const signResponse = await handleUserMessage(
+      `Sign the scheduled transaction with ID ${scheduleIdStr}`
+    );
+    
+    // Handle the resulting transaction bytes as shown above
+    if (signResponse.transactionBytes) {
+      // Present to wallet or sign with user key
+    }
+  }
+}
+```
+
+### Working with Chat History
+
+The chat history is crucial for giving the agent context of the conversation. Some best practices:
+
+1. **Format**: Each entry should have a `type` ('human' or 'ai') and `content` (string).
+2. **Memory Management**: Limit history length to avoid token limits:
+
+```typescript
+// Trim history if it gets too long
+if (chatHistory.length > 20) {
+  // Keep the most recent 15 messages
+  chatHistory.splice(0, chatHistory.length - 15);
+}
+```
+
+3. **Preserving Context**: For better results, make sure to include important context:
+
+```typescript
+// Special initialization message to set context
+chatHistory.push({ 
+  type: 'system', 
+  content: 'The user's account ID is 0.0.12345. They are interested in NFTs.'
+});
+```
+
+### Example: Complete Prompt Handling Flow
+
+Here's a complete example bringing all the concepts together:
+
+```typescript
+async function handleHederaConversation() {
+  // Initialize agent
+  const agent = new HederaConversationalAgent(agentSigner, {
+    operationalMode: 'provideBytes',
+    userAccountId: userAccountId,
+    openAIApiKey: openaiApiKey
+  });
+  await agent.initialize();
+  
+  const chatHistory = [];
+  
+  // Initialize with context
+  chatHistory.push({ 
+    type: 'system', 
+    content: `User account: ${userAccountId}. Network: ${network}.` 
+  });
+  
+  // Simulated chat loop
+  while (true) {
+    const userInput = await getUserInput(); // Your UI input function
+    if (userInput.toLowerCase() === 'exit') break;
+    
+    chatHistory.push({ type: 'human', content: userInput });
+    
+    const response = await agent.processMessage(userInput, chatHistory);
+    displayToUser(response.output);
+    chatHistory.push({ type: 'ai', content: response.output });
+    
+    // Handle special responses
+    if (response.transactionBytes) {
+      const shouldSign = await askUserToSign();
+      if (shouldSign) {
+        await signAndSubmitTransaction(response.transactionBytes);
+      }
+    }
+    
+    if (response.scheduleId) {
+      displayToUser(`Transaction scheduled! ID: ${response.scheduleId.toString()}`);
+      // Handle schedule signing if needed
+    }
+    
+    // Trim history if needed
+    if (chatHistory.length > 20) chatHistory.splice(0, chatHistory.length - 15);
+  }
+}
+```
 
 ## Available Tools
 
