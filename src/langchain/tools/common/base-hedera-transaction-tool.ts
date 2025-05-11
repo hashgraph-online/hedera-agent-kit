@@ -3,8 +3,9 @@ import { StructuredTool, ToolParams } from '@langchain/core/tools';
 import { HederaAgentKit } from '../../../agent';
 import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
 import { CallbackManagerForToolRun } from '@langchain/core/callbacks/manager';
-import { BaseServiceBuilder } from '../../../builders/base-service-builder'; // Adjusted path
-import { AccountId, Key, PrivateKey, TransactionId } from '@hashgraph/sdk';
+import { BaseServiceBuilder } from '../../../builders/base-service-builder';
+import { AccountId, Key, TransactionId } from '@hashgraph/sdk';
+import { parseKey } from '../../../utils/key-utils';
 
 export const HederaTransactionMetaOptionsSchema = z
   .object({
@@ -28,14 +29,9 @@ export const HederaTransactionMetaOptionsSchema = z
       .boolean()
       .optional()
       .describe(
-        'Set to true to schedule the transaction instead of immediate execution.'
+        'Set to true to schedule the transaction. If true, output will be for a ScheduleCreate transaction.'
       ),
-    getBytes: z
-      .boolean()
-      .optional()
-      .describe(
-        'Set to true to get transaction bytes instead of executing. `schedule` is considered if this is true.'
-      ),
+
     scheduleMemo: z
       .string()
       .optional()
@@ -50,7 +46,7 @@ export const HederaTransactionMetaOptionsSchema = z
       .string()
       .optional()
       .describe(
-        'Optional admin key (hex-encoded private/serialized public string) for the ScheduleCreate transaction.'
+        'Optional admin key (serialized string) for the ScheduleCreate transaction. Builder parses.'
       ),
   })
   .optional();
@@ -68,7 +64,7 @@ export abstract class BaseHederaTransactionTool<
   //@ts-ignore
   S extends z.ZodObject<any, any, any, any, any>
 > extends StructuredTool<
-  //@ts-ignore - To handle Zod schema compatibility issues with ToolInputSchemaBase at this generic level
+  //@ts-ignore
   z.ZodObject<
     S['shape'] & { metaOptions: typeof HederaTransactionMetaOptionsSchema },
     any,
@@ -79,9 +75,11 @@ export abstract class BaseHederaTransactionTool<
 > {
   protected hederaKit: HederaAgentKit;
   protected logger: StandardsSdkLogger;
+  protected neverScheduleThisTool: boolean = false;
 
   abstract specificInputSchema: S;
 
+  //@ts-ignore
   get schema(): this['lc_kwargs']['schema'] {
     //@ts-ignore
     return this.specificInputSchema.extend({
@@ -103,6 +101,198 @@ export abstract class BaseHederaTransactionTool<
     runManager?: CallbackManagerForToolRun
   ): Promise<void>;
 
+  protected async _applyMetaOptions(
+    builder: BaseServiceBuilder,
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
+    specificCallArgs: z.infer<S>
+  ): Promise<void> {
+    const keyFieldsToPotentiallySubstitute: (keyof typeof specificCallArgs)[] = [
+      'adminKey',
+      'kycKey',
+      'freezeKey',
+      'wipeKey',
+      'supplyKey',
+      'feeScheduleKey',
+      'pauseKey',
+    ];
+
+    for (const keyField of keyFieldsToPotentiallySubstitute) {
+      const originalKeyValue = (specificCallArgs as any)[keyField];
+
+      if (originalKeyValue === 'current_signer') {
+        try {
+          const operatorPubKey = await this.hederaKit.signer.getPublicKey();
+          const pubKeyString = operatorPubKey.toStringDer();
+          (specificCallArgs as any)[keyField] = pubKeyString;
+          this.logger.info(
+            `Substituted ${keyField as string} with current signer's public key.`
+          );
+        } catch (e: unknown) {
+          const error = e as Error;
+          this.logger.error(
+            `Failed to get current signer's public key for ${keyField as string} substitution: ${error.message}`,
+            error
+          );
+        }
+      }
+    }
+
+    if (args.metaOptions?.transactionId) {
+      try {
+        builder.setTransactionId(
+          TransactionId.fromString(args.metaOptions.transactionId)
+        );
+      } catch {
+        this.logger.warn(
+          `Invalid transactionId format in metaOptions: ${args.metaOptions.transactionId}, ignoring.`
+        );
+      }
+    }
+
+    if (args.metaOptions?.nodeAccountIds?.length > 0) {
+      try {
+        builder.setNodeAccountIds(
+          args.metaOptions.nodeAccountIds.map((id: string) =>
+            AccountId.fromString(id)
+          )
+        );
+      } catch {
+        this.logger.warn(
+          `Invalid nodeAccountId format in metaOptions, ignoring.`
+        );
+      }
+    }
+
+    if (args.metaOptions?.transactionMemo) {
+      builder.setTransactionMemo(args.metaOptions.transactionMemo);
+    }
+  }
+
+  private async _handleDirectExecution(
+    builder: BaseServiceBuilder,
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  ): Promise<string> {
+    const execOptions: {
+      schedule?: boolean;
+      scheduleMemo?: string;
+      schedulePayerAccountId?: string | AccountId;
+      scheduleAdminKey?: Key;
+    } = {};
+
+    execOptions.schedule = args.metaOptions?.schedule;
+    if (execOptions.schedule) {
+      if (args?.metaOptions?.scheduleMemo) {
+        execOptions.scheduleMemo = args.metaOptions.scheduleMemo;
+      }
+      if (args?.metaOptions?.schedulePayerAccountId) {
+        try {
+          execOptions.schedulePayerAccountId = AccountId.fromString(
+            args.metaOptions.schedulePayerAccountId
+          );
+        } catch {
+          this.logger.warn('Invalid schedulePayerAccountId');
+        }
+      }
+      if (args?.metaOptions?.scheduleAdminKey) {
+        try {
+          const parsedKey = parseKey(args.metaOptions.scheduleAdminKey);
+          if (parsedKey) execOptions.scheduleAdminKey = parsedKey;
+        } catch {
+          this.logger.warn('Invalid scheduleAdminKey');
+        }
+      }
+    }
+    this.logger.info(
+      `Executing transaction directly (mode: directExecution): ${this.name}`
+    );
+    const result = await builder.execute(execOptions);
+    return JSON.stringify(result);
+  }
+
+  private async _handleProvideBytes(
+    builder: BaseServiceBuilder,
+    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  ): Promise<string> {
+    const execOptions: {
+      schedule?: boolean;
+      scheduleMemo?: string;
+      schedulePayerAccountId?: string | AccountId;
+      scheduleAdminKey?: Key;
+    } = {};
+
+    const shouldSchedule =
+      !this.neverScheduleThisTool &&
+      (args.metaOptions?.schedule ??
+        (this.hederaKit.operationalMode === 'provideBytes' &&
+          this.hederaKit.scheduleUserTransactionsInBytesMode));
+
+    if (shouldSchedule) {
+      this.logger.info(
+        `Preparing scheduled transaction (mode: provideBytes, schedule: true): ${this.name}`
+      );
+      execOptions.schedule = true;
+      if (args?.metaOptions?.scheduleMemo) {
+        execOptions.scheduleMemo = args.metaOptions.scheduleMemo;
+      }
+      execOptions.schedulePayerAccountId =
+        this.hederaKit.signer.getAccountId();
+      if (args?.metaOptions?.scheduleAdminKey) {
+        try {
+          const parsedKey = parseKey(
+            args.metaOptions.scheduleAdminKey as string
+          );
+          if (parsedKey) execOptions.scheduleAdminKey = parsedKey;
+        } catch (e: unknown) {
+          this.logger.warn(
+            `Invalid scheduleAdminKey in metaOptions: ${
+              (e as Error).message
+            }`
+          );
+        }
+      }
+
+      const scheduleCreateResult = await builder.execute(execOptions);
+
+      if (scheduleCreateResult.success && scheduleCreateResult.scheduleId) {
+        const description =
+          args.metaOptions?.transactionMemo ||
+          `Scheduled ${this.name} operation.`;
+        return JSON.stringify({
+          success: true,
+          op: 'schedule_create',
+          schedule_id: scheduleCreateResult.scheduleId.toString(),
+          description:
+            description +
+            (this.hederaKit.userAccountId
+              ? ` User (${this.hederaKit.userAccountId}) will be payer of scheduled transaction.`
+              : ''),
+          payer_account_id_scheduled_tx:
+            this.hederaKit.userAccountId || 'unknown',
+          memo_scheduled_tx: args.metaOptions?.transactionMemo,
+        });
+      } else {
+        return JSON.stringify({
+          success: false,
+          error:
+            scheduleCreateResult.error ||
+            'Failed to create schedule and retrieve ID.',
+        });
+      }
+    } else {
+      this.logger.info(
+        `Returning transaction bytes (mode: provideBytes, schedule: false): ${this.name}`
+      );
+      const bytes = await builder.getTransactionBytes({});
+      return JSON.stringify({
+        success: true,
+        transactionBytes: bytes,
+        transactionId: builder
+          .getCurrentTransaction()
+          ?.transactionId?.toString(),
+      });
+    }
+  }
+
   protected async _call(
     args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
     runManager?: CallbackManagerForToolRun
@@ -121,52 +311,7 @@ export abstract class BaseHederaTransactionTool<
         delete (specificCallArgs as any).metaOptions;
       }
 
-      const keyFieldsToPotentiallySubstitute: (keyof typeof specificCallArgs)[] =
-        [
-          'adminKey',
-          'kycKey',
-          'freezeKey',
-          'wipeKey',
-          'supplyKey',
-          'feeScheduleKey',
-          'pauseKey',
-        ];
-
-      for (const keyField of keyFieldsToPotentiallySubstitute) {
-        if ((specificCallArgs as any)[keyField] === 'current_signer') {
-          try {
-            const operatorPubKey = await this.hederaKit.signer.getPublicKey();
-            (specificCallArgs as any)[keyField] = operatorPubKey.toStringDer();
-            this.logger.info(
-              `Substituted ${
-                keyField as string
-              } with current signer's public key.`
-            );
-          } catch (e: unknown) {
-            const error = e as Error;
-            this.logger.error(
-              `Failed to get current signer's public key for ${
-                keyField as string
-              } substitution: ${error.message}`,
-              error
-            );
-          }
-        }
-      }
-
-      if (args.metaOptions?.transactionId) {
-        builder.setTransactionId(
-          TransactionId.fromString(args.metaOptions.transactionId)
-        );
-      }
-      if (args?.metaOptions?.nodeAccountIds?.length > 0) {
-        //@ts-ignore - Linter struggles with inferred type of 'id' in map despite explicit annotation
-        builder.setNodeAccountIds(
-          args.metaOptions.nodeAccountIds.map((id: string) =>
-            AccountId.fromString(id)
-          )
-        );
-      }
+      await this._applyMetaOptions(builder, args, specificCallArgs as z.infer<S>);
 
       await this.callBuilderMethod(
         builder,
@@ -174,46 +319,10 @@ export abstract class BaseHederaTransactionTool<
         runManager
       );
 
-      if (args?.metaOptions?.transactionMemo) {
-        builder.setTransactionMemo(args.metaOptions.transactionMemo);
-      }
-
-      const execOptions: {
-        schedule?: boolean;
-        scheduleMemo?: string;
-        schedulePayerAccountId?: string | AccountId;
-        scheduleAdminKey?: Key;
-      } = {};
-
-      if (args?.metaOptions?.schedule) {
-        execOptions.schedule = args.metaOptions.schedule;
-      }
-      if (args?.metaOptions?.scheduleMemo) {
-        execOptions.scheduleMemo = args.metaOptions.scheduleMemo;
-      }
-      if (args?.metaOptions?.schedulePayerAccountId) {
-        execOptions.schedulePayerAccountId =
-          args.metaOptions.schedulePayerAccountId;
-      }
-      if (args?.metaOptions?.scheduleAdminKey) {
-        try {
-          execOptions.scheduleAdminKey = PrivateKey.fromString(
-            args.metaOptions.scheduleAdminKey
-          ).publicKey;
-        } catch (e: unknown) {
-          const error = e as Error;
-          this.logger.warn(
-            `Could not parse scheduleAdminKey string: ${args.metaOptions.scheduleAdminKey}. Scheduling without admin key. Error: ${error.message}`
-          );
-        }
-      }
-
-      if (args?.metaOptions?.getBytes) {
-        const bytes = await builder.getTransactionBytes(execOptions);
-        return JSON.stringify({ success: true, type: 'bytes', output: bytes });
+      if (this.hederaKit.operationalMode === 'directExecution') {
+        return this._handleDirectExecution(builder, args);
       } else {
-        const result = await builder.execute(execOptions);
-        return JSON.stringify(result);
+        return this._handleProvideBytes(builder, args);
       }
     } catch (error: unknown) {
       const errorMessage =

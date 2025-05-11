@@ -1,5 +1,4 @@
 import {
-  Client,
   FileCreateTransaction,
   FileAppendTransaction,
   FileUpdateTransaction,
@@ -8,7 +7,6 @@ import {
   PublicKey,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
-import { AbstractSigner } from '../../signer/abstract-signer';
 import {
   CreateFileParams,
   AppendFileParams,
@@ -16,6 +14,7 @@ import {
   DeleteFileParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
+import { HederaAgentKit } from '../../agent';
 
 const MAX_FILE_APPEND_BYTES = 6000;
 
@@ -24,8 +23,8 @@ const MAX_FILE_APPEND_BYTES = 6000;
  */
 export class FileBuilder extends BaseServiceBuilder {
 
-  constructor(signer: AbstractSigner, basicClient: Client) {
-    super(signer, basicClient);
+  constructor(hederaKit: HederaAgentKit) {
+    super(hederaKit);
   }
 
   /**

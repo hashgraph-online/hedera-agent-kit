@@ -22,6 +22,7 @@ import {
   TokenBalance,
   DetailedTokenBalance,
   SignScheduledTransactionParams,
+  AgentOperationalMode,
 } from '../types';
 import {
   get_hts_balance,
@@ -54,8 +55,9 @@ import { createHederaTools } from '../langchain';
 interface PluginConfig {
   directories?: string[];
   packages?: string[];
-  appConfig?: Record<string, any> | undefined;
+  appConfig?: Record<string, unknown> | undefined;
 }
+const NOT_INITIALIZED_ERROR = 'HederaAgentKit not initialized. Call await kit.initialize() first.';
 
 /**
  * HederaAgentKit provides a simplified interface for interacting with the Hedera network,
@@ -73,10 +75,16 @@ export class HederaAgentKit {
   private pluginConfigInternal?: PluginConfig | undefined;
   private isInitialized: boolean = false;
   public readonly logger: StandardsSdkLogger;
+  public operationalMode: AgentOperationalMode;
+  public userAccountId?: string | undefined;
+  public scheduleUserTransactionsInBytesMode: boolean;
 
   constructor(
     signer: AbstractSigner,
-    pluginConfigInput: PluginConfig | undefined
+    pluginConfigInput?: PluginConfig | undefined,
+    initialOperationalMode: AgentOperationalMode = 'provideBytes',
+    userAccountId?: string,
+    scheduleUserTransactionsInBytesMode: boolean = true
   ) {
     this.signer = signer;
     this.network = this.signer.getNetwork();
@@ -109,6 +117,9 @@ export class HederaAgentKit {
     this.pluginConfigInternal = pluginConfigInput;
     this.loadedPlugins = [];
     this.aggregatedTools = [];
+    this.operationalMode = initialOperationalMode;
+    this.userAccountId = userAccountId;
+    this.scheduleUserTransactionsInBytesMode = scheduleUserTransactionsInBytesMode;
   }
 
   /**
@@ -124,8 +135,12 @@ export class HederaAgentKit {
     this.loadedPlugins = [];
 
     const contextForLoadedPlugins: StandardsAgentKitPluginContext = {
-      logger: this.logger as any,
-      client: this as any,
+      //@ts-ignore weird type inference
+      logger: this.logger,
+      //eslint-disable-next-line multiline-comment-style
+      //TODO: we need to tweak the plugin loader to not require a client
+      //@ts-ignore
+      client: undefined,
       config: this.pluginConfigInternal?.appConfig || {},
     };
 
@@ -141,9 +156,9 @@ export class HederaAgentKit {
           this.logger.info(
             `Successfully loaded plugin: ${plugin.name} from ${dir}`
           );
-        } catch (error: any) {
+        } catch (error: unknown) {
           this.logger.error(
-            `Failed to load plugin from directory ${dir}: ${error.message}`
+            `Failed to load plugin from directory ${dir}: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
@@ -161,9 +176,9 @@ export class HederaAgentKit {
           this.logger.info(
             `Successfully loaded plugin: ${plugin.name} from package ${pkg}`
           );
-        } catch (error: any) {
+        } catch (error: unknown) {
           this.logger.error(
-            `Failed to load plugin from package ${pkg}: ${error.message}`
+            `Failed to load plugin from package ${pkg}: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
@@ -258,6 +273,9 @@ export class HederaAgentKit {
             tokenDecimals: tokenDetails.decimals || '0',
             balance: balanceInSmallestUnit,
             balanceInDisplayUnit: displayBalance,
+            timestamp: Date.now().toString(),
+            balances: [],
+            links: { next: null },
           });
         } else {
           this.logger.warn(
@@ -270,14 +288,17 @@ export class HederaAgentKit {
             tokenDecimals: '0',
             balance: balanceInSmallestUnit,
             balanceInDisplayUnit: new BigNumber(balanceInSmallestUnit),
+            timestamp: Date.now().toString(),
+            balances: [],
+            links: { next: null },
           });
         }
       }
       return detailedBalances;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(
         `Failed to get all token balances for ${accountId.toString()}: ${
-          error.message
+          error instanceof Error ? error.message : String(error)
         }`
       );
       throw error;
@@ -351,7 +372,8 @@ export class HederaAgentKit {
     try {
       const topicInfo = await this.mirrorNode.getTopicInfo(topicId.toString());
       return topicInfo;
-    } catch (error: any) {
+    } catch (e: unknown) {
+      const error = e as Error;
       this.logger.error(
         `Failed to get topic info for ${topicId.toString()}: ${error.message}`
       );
@@ -418,11 +440,9 @@ export class HederaAgentKit {
    */
   public hcs(): HcsBuilder {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before using service builders.'
-      );
+      throw new Error(NOT_INITIALIZED_ERROR);
     }
-    return new HcsBuilder(this.signer, this.client);
+    return new HcsBuilder(this);
   }
 
   /**
@@ -432,11 +452,9 @@ export class HederaAgentKit {
    */
   public hts(): HtsBuilder {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before using service builders.'
-      );
+      throw new Error(NOT_INITIALIZED_ERROR);
     }
-    return new HtsBuilder(this.signer, this.client);
+    return new HtsBuilder(this);
   }
 
   /**
@@ -446,11 +464,9 @@ export class HederaAgentKit {
    */
   public accounts(): AccountBuilder {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before using service builders.'
-      );
+      throw new Error(NOT_INITIALIZED_ERROR);
     }
-    return new AccountBuilder(this.signer, this.client);
+    return new AccountBuilder(this);
   }
 
   /**
@@ -460,11 +476,9 @@ export class HederaAgentKit {
    */
   public scs(): ScsBuilder {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before using service builders.'
-      );
+      throw new Error(NOT_INITIALIZED_ERROR);
     }
-    return new ScsBuilder(this.signer, this.client);
+    return new ScsBuilder(this);
   }
 
   /**
@@ -474,11 +488,9 @@ export class HederaAgentKit {
    */
   public fs(): FileBuilder {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before using service builders.'
-      );
+      throw new Error(NOT_INITIALIZED_ERROR);
     }
-    return new FileBuilder(this.signer, this.client);
+    return new FileBuilder(this);
   }
 
   /**
@@ -496,10 +508,10 @@ export class HederaAgentKit {
         : transactionIdInput;
     try {
       return await transactionId.getReceipt(this.client);
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(
         `Failed to get transaction receipt for ${transactionId.toString()}: ${
-          error.message
+          error instanceof Error ? error.message : String(error)
         }`
       );
       throw error;
@@ -521,10 +533,10 @@ export class HederaAgentKit {
         accountId.toString()
       );
       return accountInfo;
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(
         `Failed to get account info for ${accountId.toString()}: ${
-          error.message
+          error instanceof Error ? error.message : String(error)
         }`
       );
       throw error;
@@ -575,17 +587,16 @@ export class HederaAgentKit {
         receipt: receipt,
         transactionId: transactionIdToReport,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error(
         `Failed to sign scheduled transaction ${params.scheduleId.toString()}: ${
-          error.message
+          error instanceof Error ? error.message : String(error)
         }`
       );
       return {
         success: false,
         error:
-          error.message ||
-          'An unknown error occurred during ScheduleSign transaction.',
+          error instanceof Error ? error.message : String(error),
         transactionId: transactionIdToReport,
       };
     }

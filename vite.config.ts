@@ -64,16 +64,14 @@ export default defineConfig(({ mode }) => {
               '@langchain/openai': 'LangchainOpenAI',
               'bignumber.js': 'BigNumber',
               'date-fns': 'DateFns',
-              'fs': 'Fs',
-              'path': 'Path',
+              fs: 'Fs',
+              path: 'Path',
               dotenv: 'Dotenv',
               zod: 'Zod',
             },
           },
         },
       },
-      // For browser build, dts plugin is already in baseConfig,
-      // it will run once and output to dist/types
     };
   }
 
@@ -89,8 +87,5 @@ export default defineConfig(({ mode }) => {
         formats: ['es', 'cjs'],
       },
     },
-    // For node build, dts plugin is also in baseConfig,
-    // effectively running once due to Vite's build process optimization if configs are similar.
-    // If it runs twice, it will overwrite to the same dist/types location, which is fine.
   };
 });

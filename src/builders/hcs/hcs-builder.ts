@@ -1,5 +1,4 @@
 import {
-  Client,
   TopicCreateTransaction,
   TopicMessageSubmitTransaction,
   TopicDeleteTransaction,
@@ -10,7 +9,6 @@ import {
   KeyList,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
-import { AbstractSigner } from '../../signer/abstract-signer';
 import {
   CreateTopicParams,
   SubmitMessageParams,
@@ -18,6 +16,7 @@ import {
   UpdateTopicParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
+import { HederaAgentKit } from '../../agent';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
 const MAX_SINGLE_MESSAGE_BYTES = 1000;
@@ -27,8 +26,8 @@ const MAX_SINGLE_MESSAGE_BYTES = 1000;
  * It extends BaseServiceBuilder to provide common transaction execution and byte generation methods.
  */
 export class HcsBuilder extends BaseServiceBuilder {
-  constructor(signer: AbstractSigner, basicClient: Client) {
-    super(signer, basicClient);
+  constructor(hederaKit: HederaAgentKit) {
+    super(hederaKit);
   }
 
   /**
@@ -78,7 +77,7 @@ export class HcsBuilder extends BaseServiceBuilder {
     }
 
     if (params.exemptAccountIds && params.exemptAccountIds.length > 0) {
-      if (!this.signer.mirrorNode) {
+      if (!this.kit.signer.mirrorNode) {
         this.logger.warn(
           'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for createTopic.'
         );
@@ -86,7 +85,7 @@ export class HcsBuilder extends BaseServiceBuilder {
         try {
           const publicKeys: PublicKey[] = [];
           for (const accountIdStr of params.exemptAccountIds) {
-            const publicKey = await this.signer.mirrorNode.getPublicKey(
+            const publicKey = await this.kit.signer.mirrorNode.getPublicKey(
               accountIdStr
             );
             publicKeys.push(publicKey);
@@ -218,7 +217,7 @@ export class HcsBuilder extends BaseServiceBuilder {
 
     if (Object.prototype.hasOwnProperty.call(params, 'exemptAccountIds')) {
       if (
-        !this.signer.mirrorNode &&
+        !this.kit.signer.mirrorNode &&
         params.exemptAccountIds &&
         params.exemptAccountIds.length > 0
       ) {
@@ -232,7 +231,7 @@ export class HcsBuilder extends BaseServiceBuilder {
           try {
             const publicKeys: PublicKey[] = [];
             for (const accountIdStr of params.exemptAccountIds) {
-              const publicKey = await this.signer.mirrorNode.getPublicKey(
+              const publicKey = await this.kit.signer.mirrorNode.getPublicKey(
                 accountIdStr
               );
               publicKeys.push(publicKey);

@@ -2,7 +2,6 @@ import {
   AccountCreateTransaction,
   AccountUpdateTransaction,
   AccountDeleteTransaction,
-  Client,
   Hbar,
   PrivateKey,
   TransferTransaction,
@@ -13,9 +12,10 @@ import {
   NftId,
   Key,
   AccountId,
+  ScheduleId,
+  ScheduleSignTransaction,
 } from '@hashgraph/sdk';
 import BigNumber from 'bignumber.js';
-import { AbstractSigner } from '../../signer/abstract-signer';
 import {
   CreateAccountParams,
   HbarTransferParams,
@@ -24,14 +24,15 @@ import {
   ApproveHbarAllowanceParams,
   ApproveTokenNftAllowanceParams,
   ApproveFungibleTokenAllowanceParams,
-  DeleteNftAllowanceAllSerialsParams,
   RevokeHbarAllowanceParams,
   RevokeFungibleTokenAllowanceParams,
   DeleteNftSpenderAllowanceParams,
   DeleteNftSpenderAllowanceToolParams,
   DeleteNftSerialAllowancesParams,
+  SignScheduledTransactionParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
+import { HederaAgentKit } from '../../agent';
 
 const DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
@@ -39,8 +40,8 @@ const DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS = 7776000;
  * AccountBuilder facilitates the construction and execution of Hedera account-related transactions.
  */
 export class AccountBuilder extends BaseServiceBuilder {
-  constructor(signer: AbstractSigner, basicClient: Client) {
-    super(signer, basicClient);
+  constructor(hederaKit: HederaAgentKit) {
+    super(hederaKit);
   }
 
   /**
@@ -187,36 +188,72 @@ export class AccountBuilder extends BaseServiceBuilder {
   /**
    * Transfers HBAR between accounts.
    * @param {HbarTransferParams} params Parameters for the HBAR transfer.
+   * @param {boolean} [isUserInitiated=true] Whether this transfer was initiated by the user (vs. system/agent)
    * @returns {this} The builder instance for chaining.
    * @throws {Error} If transfers are missing or do not sum to zero.
    */
-  public transferHbar(params: HbarTransferParams): this {
+  public transferHbar(params: HbarTransferParams, isUserInitiated: boolean = true): this {
     const transaction = new TransferTransaction();
     if (!params.transfers || params.transfers.length === 0) {
       throw new Error('HbarTransferParams must include at least one transfer.');
     }
+    
     let netZeroInTinybars = new BigNumber(0);
+    let userTransferProcessedForScheduling = false;
 
-    for (const transferInput of params.transfers) {
-      const accountId =
-        typeof transferInput.accountId === 'string'
-          ? AccountId.fromString(transferInput.accountId)
-          : transferInput.accountId;
+    if (isUserInitiated && 
+        this.kit.userAccountId && 
+        this.kit.operationalMode === 'provideBytes' && 
+        this.kit.scheduleUserTransactionsInBytesMode && 
+        params.transfers.length === 1) {
+          
+      const receiverTransfer = params.transfers[0];
+      const amountValue = typeof receiverTransfer.amount === 'string' || typeof receiverTransfer.amount === 'number' 
+        ? receiverTransfer.amount 
+        : receiverTransfer.amount.toString();
+      
+      const amountBigNum = new BigNumber(amountValue);
 
-      const sdkHbarAmount = Hbar.fromTinybars(
-        transferInput.amount as string | number
-      );
+      if (amountBigNum.isPositive()) {
+        const recipientAccountId = typeof receiverTransfer.accountId === 'string'
+          ? AccountId.fromString(receiverTransfer.accountId)
+          : receiverTransfer.accountId;
+        
+        const sdkHbarAmount = Hbar.fromTinybars(amountValue);
+        
+        this.logger.info(`[AccountBuilder.transferHbar] Configuring user-initiated scheduled transfer: ${sdkHbarAmount.toString()} from ${this.kit.userAccountId} to ${recipientAccountId.toString()}`);
 
-      transaction.addHbarTransfer(accountId, sdkHbarAmount);
-
-      const tinybarsContribution = sdkHbarAmount.toTinybars();
-      netZeroInTinybars = netZeroInTinybars.plus(
-        tinybarsContribution.toString()
-      );
+        transaction.addHbarTransfer(recipientAccountId, sdkHbarAmount);
+        transaction.addHbarTransfer(AccountId.fromString(this.kit.userAccountId), sdkHbarAmount.negated());
+        
+        userTransferProcessedForScheduling = true; 
+      }
     }
+    
+    if (!userTransferProcessedForScheduling) {
+      for (const transferInput of params.transfers) {
+        const accountId =
+          typeof transferInput.accountId === 'string'
+            ? AccountId.fromString(transferInput.accountId)
+            : transferInput.accountId;
 
-    if (!netZeroInTinybars.isZero()) {
-      throw new Error('The sum of all HBAR transfers must be zero.');
+        const amountValue = typeof transferInput.amount === 'string' || typeof transferInput.amount === 'number'
+          ? transferInput.amount
+          : transferInput.amount.toString();
+
+        const sdkHbarAmount = Hbar.fromTinybars(amountValue);
+
+        transaction.addHbarTransfer(accountId, sdkHbarAmount);
+
+        const tinybarsContribution = sdkHbarAmount.toTinybars();
+        netZeroInTinybars = netZeroInTinybars.plus(
+          tinybarsContribution.toString()
+        );
+      }
+
+      if (!netZeroInTinybars.isZero()) {
+        throw new Error('The sum of all HBAR transfers must be zero.');
+      }
     }
 
     if (typeof params.memo !== 'undefined') {
@@ -379,7 +416,7 @@ export class AccountBuilder extends BaseServiceBuilder {
   public approveHbarAllowance(params: ApproveHbarAllowanceParams): this {
     const transaction =
       new AccountAllowanceApproveTransaction().approveHbarAllowance(
-        params.ownerAccountId || this.signer.getAccountId(),
+        params.ownerAccountId || this.kit.signer.getAccountId(),
         params.spenderAccountId,
         params.amount
       );
@@ -397,7 +434,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     params: ApproveTokenNftAllowanceParams
   ): this {
     const transaction = new AccountAllowanceApproveTransaction();
-    const owner = params.ownerAccountId || this.signer.getAccountId();
+    const owner = params.ownerAccountId || this.kit.signer.getAccountId();
     const tokenId =
       typeof params.tokenId === 'string'
         ? TokenId.fromString(params.tokenId)
@@ -470,7 +507,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     const transaction =
       new AccountAllowanceApproveTransaction().approveTokenAllowance(
         tokenId,
-        params.ownerAccountId || this.signer.getAccountId(),
+        params.ownerAccountId || this.kit.signer.getAccountId(),
         params.spenderAccountId,
         amountLong
       );
@@ -491,7 +528,7 @@ export class AccountBuilder extends BaseServiceBuilder {
       typeof params.nftId === 'string'
         ? NftId.fromString(params.nftId)
         : params.nftId;
-    const owner = params.ownerAccountId || this.signer.getAccountId();
+    const owner = params.ownerAccountId || this.kit.signer.getAccountId();
 
     const transaction =
       new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
@@ -521,7 +558,7 @@ export class AccountBuilder extends BaseServiceBuilder {
   public revokeHbarAllowance(params: RevokeHbarAllowanceParams): this {
     const transaction =
       new AccountAllowanceApproveTransaction().approveHbarAllowance(
-        params.ownerAccountId || this.signer.getAccountId(),
+        params.ownerAccountId || this.kit.signer.getAccountId(),
         params.spenderAccountId,
         new Hbar(0)
       );
@@ -544,7 +581,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     const transaction =
       new AccountAllowanceApproveTransaction().approveTokenAllowance(
         tokenId,
-        params.ownerAccountId || this.signer.getAccountId(),
+        params.ownerAccountId || this.kit.signer.getAccountId(),
         params.spenderAccountId,
         0
       );
@@ -561,11 +598,18 @@ export class AccountBuilder extends BaseServiceBuilder {
   public deleteNftSerialAllowancesForAllSpenders(
     params: DeleteNftSerialAllowancesParams
   ): this {
-    const ownerAccId = params.ownerAccountId 
-      ? (typeof params.ownerAccountId === 'string' ? AccountId.fromString(params.ownerAccountId) : params.ownerAccountId) 
-      : this.signer.getAccountId();
+    let ownerAccId: AccountId;
+    if (params.ownerAccountId) {
+      if (typeof params.ownerAccountId === 'string') {
+        ownerAccId = AccountId.fromString(params.ownerAccountId);
+      } else {
+        ownerAccId = params.ownerAccountId;
+      }
+    } else {
+      ownerAccId = this.kit.signer.getAccountId();
+    }
 
-    // Parse the nftIdString (e.g., "0.0.123.45") into an NftId object
+
     const parts = params.nftIdString.split('.');
     if (parts.length !== 4) {
       throw new Error(`Invalid nftIdString format: ${params.nftIdString}. Expected format like "0.0.token.serial".`);
@@ -576,7 +620,7 @@ export class AccountBuilder extends BaseServiceBuilder {
 
     const transaction =
       new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
-        sdkNftId, // Use the parsed NftId
+        sdkNftId,
         ownerAccId
       );
 
@@ -604,7 +648,7 @@ export class AccountBuilder extends BaseServiceBuilder {
           ? AccountId.fromString(params.ownerAccountId)
           : params.ownerAccountId;
     } else {
-      ownerAccIdToUse = this.signer.getAccountId();
+      ownerAccIdToUse = this.kit.signer.getAccountId();
     }
 
     const sdkTokenId =
@@ -625,6 +669,31 @@ export class AccountBuilder extends BaseServiceBuilder {
         new NftId(sdkTokenId, sdkSerials[0]),
         ownerAccIdToUse
       );
+
+    if (params.memo) {
+      transaction.setTransactionMemo(params.memo);
+    }
+
+    this.setCurrentTransaction(transaction);
+    return this;
+  }
+
+  /**
+   * Prepares a ScheduleSignTransaction for a previously scheduled transaction.
+   * @param {SignScheduledTransactionParams} params Parameters for the ScheduleSign transaction.
+   * @returns {this} The builder instance for chaining.
+   */
+  public prepareSignScheduledTransaction(params: SignScheduledTransactionParams): this {
+    if (!params.scheduleId) {
+      throw new Error('scheduleId is required to prepare a ScheduleSignTransaction.');
+    }
+
+    const scheduleId =
+      typeof params.scheduleId === 'string'
+        ? ScheduleId.fromString(params.scheduleId)
+        : params.scheduleId;
+
+    const transaction = new ScheduleSignTransaction().setScheduleId(scheduleId);
 
     if (params.memo) {
       transaction.setTransactionMemo(params.memo);

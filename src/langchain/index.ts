@@ -36,6 +36,7 @@ import { HederaUpdateAccountTool } from './tools/account/update-account-tool';
 import { HederaTransferHbarTool } from './tools/account/transfer-hbar-tool';
 import { HederaRevokeHbarAllowanceTool } from './tools/account/revoke-hbar-allowance-tool';
 import { HederaRevokeFungibleTokenAllowanceTool } from './tools/account/revoke-fungible-token-allowance-tool';
+import { SignAndExecuteScheduledTransactionTool } from './tools/account/sign-and-execute-scheduled-transaction-tool';
 import { HederaCreateFileTool } from './tools/file/create-file-tool';
 import { HederaAppendFileTool } from './tools/file/append-file-tool';
 import { HederaUpdateFileTool } from './tools/file/update-file-tool';
@@ -72,6 +73,7 @@ export async function createHederaTools(
     new HederaUpdateAccountTool(toolParams),
     new HederaRevokeHbarAllowanceTool(toolParams),
     new HederaRevokeFungibleTokenAllowanceTool(toolParams),
+    new SignAndExecuteScheduledTransactionTool(toolParams),
     new HederaCreateTopicTool(toolParams),
     new HederaDeleteTopicTool(toolParams),
     new HederaSubmitMessageTool(toolParams),

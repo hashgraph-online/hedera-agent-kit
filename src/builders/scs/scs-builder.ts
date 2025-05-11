@@ -1,5 +1,4 @@
 import {
-  Client,
   ContractCreateTransaction,
   ContractExecuteTransaction,
   ContractUpdateTransaction,
@@ -12,7 +11,7 @@ import {
   ContractFunctionResult,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
-import { AbstractSigner } from '../../signer/abstract-signer';
+
 import {
   CreateContractParams,
   ExecuteContractParams,
@@ -21,6 +20,7 @@ import {
   ContractCallQueryParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
+import { HederaAgentKit } from '../../agent';
 
 const DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
@@ -28,8 +28,8 @@ const DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS = 7776000;
  * ScsBuilder facilitates Hedera Smart Contract Service (SCS) transactions.
  */
 export class ScsBuilder extends BaseServiceBuilder {
-  constructor(signer: AbstractSigner, basicClient: Client) {
-    super(signer, basicClient);
+  constructor(hederaKit: HederaAgentKit) {
+    super(hederaKit);
   }
 
   /**
@@ -272,7 +272,7 @@ export class ScsBuilder extends BaseServiceBuilder {
       this.logger.info(
         `Executing ContractCallQuery for contract ${params.contractId.toString()}`
       );
-      return await query.execute(this.basicClient);
+      return await query.execute(this.kit.client);
     } catch (error: unknown) {
       this.logger.error(
         `ContractCallQuery failed for contract ${params.contractId.toString()}: ${

@@ -5,7 +5,10 @@ import {
 } from '../common/base-hedera-transaction-tool';
 import { AccountBuilder } from '../../../builders/account/account-builder';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
-import { DeleteNftSpenderAllowanceParams } from '../../../types';
+import {
+  DeleteNftSpenderAllowanceParams,
+  DeleteNftSpenderAllowanceToolParams,
+} from '../../../types';
 
 const DeleteNftSpenderAllowanceZodSchemaCore = z.object({
   ownerAccountId: z
@@ -56,7 +59,7 @@ export class HederaDeleteNftSpenderAllowanceTool extends BaseHederaTransactionTo
     specificArgs: z.infer<typeof DeleteNftSpenderAllowanceZodSchemaCore>
   ): Promise<void> {
     await (builder as AccountBuilder).deleteTokenNftAllowanceForSpender(
-      specificArgs as unknown as DeleteNftSpenderAllowanceParams
+      specificArgs as unknown as DeleteNftSpenderAllowanceToolParams
     );
   }
 }

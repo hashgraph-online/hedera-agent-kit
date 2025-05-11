@@ -1,6 +1,5 @@
 import {
   AccountId,
-  Client,
   Transaction,
   TransactionId,
   TransactionReceipt,
@@ -15,6 +14,7 @@ import {
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../signer/abstract-signer';
 import { Logger } from '@hashgraphonline/standards-sdk';
+import type { HederaAgentKit } from '../agent';
 
 /**
  * Defines the structure for the result of an execute operation.
@@ -34,21 +34,42 @@ export interface ExecuteResult {
 export abstract class BaseServiceBuilder {
   protected currentTransaction: Transaction | null = null;
   protected logger: Logger;
-  protected originalSigner: AbstractSigner;
+  protected kit: HederaAgentKit;
 
   /**
-   * @param {AbstractSigner} signer
-   * @param {Client} basicClient
+   * @param {HederaAgentKit} kit - The HederaAgentKit instance
    */
-  constructor(
-    protected readonly signer: AbstractSigner,
-    protected readonly basicClient: Client
-  ) {
-    this.originalSigner = signer;
+  constructor(protected readonly hederaKit: HederaAgentKit) {
+    this.kit = hederaKit;
     this.logger = new Logger({
       module: 'ServiceBuilder',
       level: 'info',
     });
+  }
+
+  /**
+   * Helper method to get the effective sender account to use for transactions.
+   * In user-centric contexts, this will be the user's account. Otherwise, it falls back to the signer's account.
+   * @returns {AccountId} The account ID to use as sender
+   */
+  protected getEffectiveSenderAccountId(): AccountId {
+    if (this.kit.userAccountId) {
+      return AccountId.fromString(this.kit.userAccountId);
+    }
+    return this.kit.signer.getAccountId();
+  }
+
+  /**
+   * Helper method to determine if a transaction is a user-initiated transfer.
+   * Used for properly constructing transfer arrays.
+   * @param {boolean} isUserInitiated Whether this is a user-initiated transfer
+   * @returns {AccountId} The account that should be used as the sender
+   */
+  protected getTransferSourceAccount(isUserInitiated: boolean = true): AccountId {
+    if (isUserInitiated && this.kit.userAccountId) {
+      return AccountId.fromString(this.kit.userAccountId);
+    }
+    return this.kit.signer.getAccountId();
   }
 
   /**
@@ -126,7 +147,6 @@ export abstract class BaseServiceBuilder {
       innerTransaction.transactionId?.toString();
 
     if (options?.schedule) {
-      this.logger.info('Scheduling transaction...');
       const scheduleCreateTx =
         new ScheduleCreateTransaction().setScheduledTransaction(
           innerTransaction
@@ -148,14 +168,14 @@ export abstract class BaseServiceBuilder {
 
       transactionToExecute = scheduleCreateTx;
       if (!transactionToExecute.transactionId) {
-        await transactionToExecute.freezeWith(this.basicClient);
+        await transactionToExecute.freezeWith(this.kit.client);
       }
       originalTransactionIdForReporting =
         transactionToExecute.transactionId?.toString();
     }
 
     try {
-      const receipt = await this.signer.signAndExecuteTransaction(
+      const receipt = await this.kit.signer.signAndExecuteTransaction(
         transactionToExecute
       );
 
@@ -208,7 +228,6 @@ export abstract class BaseServiceBuilder {
     let transactionForBytes: Transaction = this.currentTransaction;
 
     if (options?.schedule) {
-      this.logger.info('Preparing bytes for scheduled transaction...');
       const scheduleCreateTx =
         new ScheduleCreateTransaction().setScheduledTransaction(
           this.currentTransaction
@@ -320,11 +339,11 @@ export abstract class BaseServiceBuilder {
     }
     if (typeof keyInput === 'string') {
       if (keyInput.toLowerCase() === 'current_signer') {
-        if (this.signer) {
+        if (this.kit.signer) {
           this.logger.info(
             `[BaseServiceBuilder.parseKey] Substituting "current_signer" with signer's public key.`
           );
-          return await this.signer.getPublicKey();
+          return await this.kit.signer.getPublicKey();
         } else {
           throw new Error(
             '[BaseServiceBuilder.parseKey] Signer is not available to resolve "current_signer".'

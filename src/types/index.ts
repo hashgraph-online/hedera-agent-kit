@@ -48,6 +48,7 @@ export {
   ScheduleId,
 };
 
+export type AgentOperationalMode = 'directExecution' | 'provideBytes';
 export type HederaNetworkType = 'mainnet' | 'testnet';
 
 export type TokenBalance = {
@@ -60,7 +61,7 @@ export type TokenHoldersBalancesApiResponse = {
   timestamp: string;
   balances: TokenBalance[];
   links: {
-    next: string; // link to the next page
+    next: string;
   };
 };
 
@@ -71,6 +72,18 @@ export type DetailedTokenBalance = {
   tokenDecimals: string;
   balance: number;
   balanceInDisplayUnit: BigNumber;
+  timestamp: string;
+  balances: {
+    account: string;
+    balance: number;
+    tokens: {
+      token_id: string;
+      balance: number;
+    }[];
+  }[];
+  links: {
+    next: string | null;
+  };
 };
 
 export type HtsTokenBalanceApiReponse = {
@@ -122,6 +135,8 @@ export type HtsTokenDetails = {
   treasury_account_id: string;
   type: 'FUNGIBLE_COMMON' | 'NON_FUNGIBLE_UNIQUE';
   wipe_key: ProtobufEncodedKey;
+  supplyType: TokenSupplyType;
+  maxSupply?: number | BigNumber;
 };
 
 export type AllTokensBalancesApiResponse = {
@@ -154,20 +169,20 @@ export type PendingAirdropsApiResponse = {
 };
 
 type TimestampRange = {
-  from: string; // Unix timestamp in seconds.nanoseconds format
-  to?: string | null; // Nullable Unix timestamp
+  from: string;
+  to?: string | null;
 };
 
 export type TopicInfoApiResponse = {
   admin_key?: Key | null;
-  auto_renew_account?: string | null; // Format: shard.realm.num (e.g., "0.0.2")
-  auto_renew_period?: number | null; // 64-bit integer
-  created_timestamp?: string | null; // Unix timestamp (e.g., "1586567700.453054000")
+  auto_renew_account?: string | null;
+  auto_renew_period?: number | null;
+  created_timestamp?: string | null;
   deleted?: boolean | null;
   memo?: string;
   submit_key?: Key | null;
   timestamp?: TimestampRange;
-  topic_id?: string | null; // Format: shard.realm.num (e.g., "0.0.2")
+  topic_id?: string | null;
 };
 
 export type HCSMessage = {
@@ -179,6 +194,8 @@ export type HCSMessage = {
   running_hash_version: number;
   sequence_number: number;
   topic_id: string;
+  supplyType: TokenSupplyType;
+  maxSupply?: number | BigNumber;
 };
 
 export type HCSMessageApiResponse = {
@@ -404,6 +421,11 @@ export interface MintNFTParams {
   metadata: Uint8Array[];
   /** Optional. The batch size for minting transactions if many NFTs are minted. Defaults to 10. */
   batchSize?: number;
+  nftId: NftId;
+  senderAccountId: string | AccountId;
+  receiverAccountId: string | AccountId;
+  isApproved?: boolean;
+  memo?: string;
 }
 
 /**
@@ -487,6 +509,17 @@ export interface AssociateTokensParams {
   accountId: string | AccountId;
   /** An array of token IDs to associate. */
   tokenIds: Array<string | TokenId>;
+  initialBalance?: number | BigNumber | undefined;
+  key: string | PublicKey;
+  memo?: string;
+  autoRenewAccountId?: string | AccountId;
+  autoRenewPeriod?: number;
+  receiverSignatureRequired?: boolean;
+  maxAutomaticTokenAssociations?: number;
+  stakedAccountId?: string | AccountId;
+  stakedNodeId?: number | Long;
+  declineStakingReward?: boolean;
+  alias?: EvmAddress | string;
 }
 
 /**
@@ -745,6 +778,10 @@ export interface CreateContractParams {
   declineStakingReward?: boolean;
   /** Max automatic token associations for the contract. */
   maxAutomaticTokenAssociations?: number;
+  contractId: string | ContractId;
+  functionName: string;
+  functionParameters?: ContractFunctionParameters;
+  payableAmount?: number | BigNumber | Hbar;
 }
 
 /**
@@ -778,7 +815,14 @@ export interface CreateFileParams {
    */
   keys?: Array<string | Key | KeyList>;
   /** A memo associated with the file. Max 100 characters. */
-  memo?: string;
+  adminKey?: string | Key | null;
+  autoRenewPeriod?: number;
+  memo?: string | null;
+  stakedAccountId?: string | AccountId | '0.0.0' | null;
+  stakedNodeId?: number | Long | null;
+  declineStakingReward?: boolean;
+  maxAutomaticTokenAssociations?: number;
+  proxyAccountId?: string | AccountId | '0.0.0' | null;
 }
 
 /**
@@ -887,6 +931,7 @@ export interface UpdateAccountParams {
   declineStakingReward?: boolean;
   /** If true, the account must sign any transaction transferring hbar out of this account. */
   receiverSignatureRequired?: boolean;
+  amount: number | Long;
 }
 
 /**
@@ -1007,6 +1052,7 @@ export interface AirdropTokenParams {
   recipients: AirdropRecipient[];
   /** Optional memo for the transaction. */
   memo?: string;
+  pendingAirdropIds: PendingAirdropId[];
 }
 
 /**
@@ -1100,7 +1146,7 @@ export interface DeleteNftSpenderAllowanceParams {
  * Parameters for deleting/revoking NFT allowances for specific serials for a specific spender.
  */
 export interface DeleteNftSpenderAllowanceToolParams {
-  ownerAccountId?: string | AccountId; 
+  ownerAccountId?: string | AccountId;
   spenderAccountId: string | AccountId;
   tokenId: string | TokenId;
   serials: Array<number | string | Long>;
@@ -1114,6 +1160,7 @@ export interface DeleteNftSerialAllowancesParams {
   ownerAccountId?: string | AccountId;
   nftIdString: string; // e.g., "0.0.tokenid.serial"
   memo?: string;
+  pendingAirdropIds: PendingAirdropId[];
 }
 
 // Added for ClaimAirdropTool
