@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PauseTokenParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -32,6 +33,8 @@ export class HederaPauseTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof PauseTokenZodSchemaCore>
   ): Promise<void> {
-    (builder as HtsBuilder).pauseToken({ tokenId: specificArgs.tokenId });
+    await (builder as HtsBuilder).pauseToken(
+      specificArgs as unknown as PauseTokenParams
+    );
   }
 }

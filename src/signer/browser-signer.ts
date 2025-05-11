@@ -4,9 +4,9 @@ import {
   TransactionReceipt,
   Signer as HederaSdkSigner,
   PrivateKey,
-} from "@hashgraph/sdk";
-import { AbstractSigner, HederaNetworkType } from "./abstract-signer";
-import { HashinalsWalletConnectSDK } from "@hashgraphonline/hashinal-wc";
+} from '@hashgraph/sdk';
+import { AbstractSigner, HederaNetworkType } from './abstract-signer';
+import { HashinalsWalletConnectSDK } from '@hashgraphonline/hashinal-wc';
 
 /**
  * A signer implementation for browser environments that uses HashConnect for signing.
@@ -26,28 +26,26 @@ export class BrowserSigner extends AbstractSigner {
   constructor(
     hwcSdk: HashinalsWalletConnectSDK,
     network: HederaNetworkType,
-    accountId: string | AccountId,
+    accountId: string | AccountId
   ) {
     super();
     this.hwcSdk = hwcSdk;
     this.networkInternal = network;
     this.accountIdInternal = AccountId.fromString(accountId.toString());
 
-    const foundSigner = this.hwcSdk.dAppConnector?.signers?.find(
-      (s) => {
-        const hederaSigner = s as HederaSdkSigner;
-        const signerAccount = hederaSigner.getAccountId();
-        if (signerAccount) {
-          return signerAccount.toString() === this.accountIdInternal.toString();
-        }
-        return false;
+    const foundSigner = this.hwcSdk.dAppConnector?.signers?.find((s) => {
+      const hederaSigner = s as HederaSdkSigner;
+      const signerAccount = hederaSigner.getAccountId();
+      if (signerAccount) {
+        return signerAccount.toString() === this.accountIdInternal.toString();
       }
-    );
+      return false;
+    });
 
     if (!foundSigner) {
       throw new Error(
         `No HashConnect signer (HederaSdkSigner) could be found or initialized within HashinalsWalletConnectSDK for account ID ${this.accountIdInternal.toString()}. ` +
-        `Ensure the account is paired and selected in HashPack for the dApp on network ${this.networkInternal}.`
+          `Ensure the account is paired and selected in HashPack for the dApp on network ${this.networkInternal}.`
       );
     }
 
@@ -72,7 +70,10 @@ export class BrowserSigner extends AbstractSigner {
   public async signAndExecuteTransaction(
     transaction: Transaction
   ): Promise<TransactionReceipt> {
-    const outcome = await this.hwcSdk.executeTransactionWithErrorHandling(transaction, false);
+    const outcome = await this.hwcSdk.executeTransactionWithErrorHandling(
+      transaction,
+      false
+    );
 
     if (outcome.error) {
       throw new Error(`Transaction failed: ${outcome.error}`);
@@ -82,7 +83,9 @@ export class BrowserSigner extends AbstractSigner {
       return outcome.result;
     }
 
-    throw new Error("Transaction execution with HashinalsWalletConnectSDK yielded no result or error.");
+    throw new Error(
+      'Transaction execution with HashinalsWalletConnectSDK yielded no result or error.'
+    );
   }
 
   /**
@@ -99,9 +102,19 @@ export class BrowserSigner extends AbstractSigner {
    * @returns {string | PrivateKey} Throws an error as private key is not accessible.
    * @throws {Error} Always, as BrowserSigner does not hold private keys.
    */
+  //@ts-ignore
   public getOperatorPrivateKey(): string | PrivateKey {
     throw new Error(
-      'BrowserSigner does not have direct access to private keys. Signing is delegated to the user\'s wallet.'
+      "BrowserSigner does not have direct access to private keys. Signing is delegated to the user's wallet."
     );
+  }
+
+  /**
+   * Retrieves the Hedera client instance.
+   * @returns {Client} The Hedera client instance.
+   */
+  //@ts-ignore
+  public getClient(): any {
+    throw new Error('BrowserSigner does not have a Hedera client instance.');
   }
 }

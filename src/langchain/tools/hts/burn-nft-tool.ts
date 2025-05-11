@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { BurnNFTParams } from '../../../types';
-import { Long } from '@hashgraph/sdk';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -11,11 +10,12 @@ import { HtsBuilder } from '../../../builders/hts/hts-builder';
 const BurnNFTZodSchemaCore = z.object({
   tokenId: z
     .string()
-    .describe('The ID of the NFT collection to burn from (e.g., "0.0.xxxx").'),
+    .describe('The ID of the NFT collection (e.g., "0.0.xxxx").'),
   serials: z
-    .array(z.union([z.number(), z.string()]))
+    .array(z.union([z.number().int().positive(), z.string()]))
+    .min(1)
     .describe(
-      'An array of serial numbers (number or string for large values) to burn.'
+      'Array of serial numbers to burn. Numbers or strings for large serials. Builder handles conversion.'
     ),
 });
 
@@ -24,7 +24,7 @@ export class HederaBurnNftTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-hts-burn-nft';
   description =
-    'Burns Non-Fungible Tokens (NFTs). Requires the token ID and an array of serial numbers. Use metaOptions for execution control.';
+    'Burns Non-Fungible Tokens (NFTs). Requires token ID and an array of serial numbers.';
   specificInputSchema = BurnNFTZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -39,17 +39,8 @@ export class HederaBurnNftTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof BurnNFTZodSchemaCore>
   ): Promise<void> {
-    if (!specificArgs.serials || specificArgs.serials.length === 0) {
-      throw new Error(
-        'An array of serial numbers must be provided to burn NFTs.'
-      );
-    }
-
-    const burnParams: BurnNFTParams = {
-      tokenId: specificArgs.tokenId,
-      // The HtsBuilder's burnNonFungibleToken method uses parseAmount internally for serials
-      serials: specificArgs.serials as Array<number | Long | BigNumber>,
-    };
-    (builder as HtsBuilder).burnNonFungibleToken(burnParams);
+    await (builder as HtsBuilder).burnNonFungibleToken(
+      specificArgs as unknown as BurnNFTParams
+    );
   }
 }

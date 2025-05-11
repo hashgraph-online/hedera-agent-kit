@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { UpdateContractParams, Key } from '../../../types';
-import { AccountId, Long } from '@hashgraph/sdk';
+import { UpdateContractParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -14,40 +13,43 @@ const UpdateContractZodSchemaCore = z.object({
     .describe('The ID of the contract to update (e.g., "0.0.xxxx").'),
   adminKey: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New admin key (serialized string or "null" to clear).'
+      'Optional. New admin key (serialized string). Pass null to clear.'
     ),
   autoRenewPeriod: z
     .number()
     .int()
+    .positive()
     .optional()
     .describe('Optional. New auto-renewal period in seconds.'),
   memo: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New contract memo. Send "null" or empty string to clear.'
+      'Optional. New contract memo. Pass null or empty string to clear.'
     ),
   stakedAccountId: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New account ID to stake to. Use "0.0.0" or "null" to remove staking.'
+      'Optional. New account ID to stake to. Pass "0.0.0" or null to clear.'
     ),
   stakedNodeId: z
     .number()
     .int()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New node ID to stake to. Use -1, or omit/send undefined with stakedAccountId="0.0.0" to remove staking.'
+      'Optional. New node ID to stake to. Pass -1 or null to clear. Builder handles Long conversion.'
     ),
   declineStakingReward: z
     .boolean()
     .optional()
-    .describe(
-      'Optional. If true, the contract declines receiving a staking reward.'
-    ),
+    .describe('Optional. If true, contract declines staking rewards.'),
   maxAutomaticTokenAssociations: z
     .number()
     .int()
@@ -55,10 +57,9 @@ const UpdateContractZodSchemaCore = z.object({
     .describe('Optional. New max automatic token associations.'),
   proxyAccountId: z
     .string()
+    .nullable()
     .optional()
-    .describe(
-      'Optional. New proxy account ID. Use "0.0.0" or "null" to clear.'
-    ),
+    .describe('Optional. New proxy account ID. Pass "0.0.0" or null to clear.'),
 });
 
 export class HederaUpdateContractTool extends BaseHederaTransactionTool<
@@ -66,7 +67,7 @@ export class HederaUpdateContractTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-scs-update-contract';
   description =
-    'Updates an existing Hedera smart contract. Requires contractId and fields to update. Use metaOptions for execution control.';
+    'Updates an existing Hedera smart contract. Builder handles parsing and clearing logic.';
   specificInputSchema = UpdateContractZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -81,61 +82,8 @@ export class HederaUpdateContractTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof UpdateContractZodSchemaCore>
   ): Promise<void> {
-    const updateParams: UpdateContractParams = {
-      contractId: specificArgs.contractId,
-    };
-
-    const valOrNull = (val: string | undefined): string | null | undefined =>
-      val === undefined ? undefined : val === 'null' || val === '' ? null : val;
-    const keyOrNull = (
-      val: string | undefined
-    ): string | Key | null | undefined =>
-      val === undefined ? undefined : val === 'null' ? null : val;
-    const accountIdOrClearString = (
-      val: string | undefined
-    ): string | AccountId | '0.0.0' | null | undefined => {
-      if (val === undefined) return undefined;
-      if (val === 'null' || val.toLowerCase() === '0.0.0') return '0.0.0';
-      return val;
-    };
-
-    let processedVal: any;
-
-    if (specificArgs.adminKey) {
-      processedVal = keyOrNull(specificArgs.adminKey);
-      if (processedVal) updateParams.adminKey = processedVal;
-    }
-    if (specificArgs.autoRenewPeriod) {
-      updateParams.autoRenewPeriod = specificArgs.autoRenewPeriod;
-    }
-    if (specificArgs.memo) {
-      processedVal = valOrNull(specificArgs.memo);
-      if (processedVal) updateParams.memo = processedVal;
-    }
-    if (specificArgs.stakedAccountId) {
-      processedVal = accountIdOrClearString(specificArgs.stakedAccountId);
-      if (processedVal) updateParams.stakedAccountId = processedVal;
-    }
-    if (specificArgs.stakedNodeId) {
-      updateParams.stakedNodeId =
-        specificArgs.stakedNodeId === -1
-          ? Long.fromNumber(-1)
-          : Long.fromNumber(specificArgs.stakedNodeId);
-    } else if (updateParams.stakedAccountId === '0.0.0') {
-      updateParams.stakedNodeId = Long.fromNumber(-1); // Clear node if account is cleared
-    }
-    if (specificArgs.declineStakingReward) {
-      updateParams.declineStakingReward = specificArgs.declineStakingReward;
-    }
-    if (specificArgs.maxAutomaticTokenAssociations) {
-      updateParams.maxAutomaticTokenAssociations =
-        specificArgs.maxAutomaticTokenAssociations;
-    }
-    if (specificArgs.proxyAccountId) {
-      processedVal = accountIdOrClearString(specificArgs.proxyAccountId);
-      if (processedVal) updateParams.proxyAccountId = processedVal;
-    }
-
-    (builder as ScsBuilder).updateContract(updateParams);
+    await (builder as ScsBuilder).updateContract(
+      specificArgs as unknown as UpdateContractParams
+    );
   }
 }

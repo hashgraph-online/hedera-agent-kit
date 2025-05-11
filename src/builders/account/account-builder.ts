@@ -1,24 +1,18 @@
 import {
-  AccountId,
   AccountCreateTransaction,
   AccountUpdateTransaction,
   AccountDeleteTransaction,
   Client,
   Hbar,
   PrivateKey,
-  PublicKey,
-  Transaction,
-  TransactionReceipt,
   TransferTransaction,
   Long,
-  EvmAddress,
-  Timestamp,
   AccountAllowanceApproveTransaction,
   AccountAllowanceDeleteTransaction,
-  HbarUnit,
   TokenId,
   NftId,
   Key,
+  AccountId,
 } from '@hashgraph/sdk';
 import BigNumber from 'bignumber.js';
 import { AbstractSigner } from '../../signer/abstract-signer';
@@ -34,6 +28,8 @@ import {
   RevokeHbarAllowanceParams,
   RevokeFungibleTokenAllowanceParams,
   DeleteNftSpenderAllowanceParams,
+  DeleteNftSpenderAllowanceToolParams,
+  DeleteNftSerialAllowancesParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
 
@@ -43,32 +39,35 @@ const DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS = 7776000;
  * AccountBuilder facilitates the construction and execution of Hedera account-related transactions.
  */
 export class AccountBuilder extends BaseServiceBuilder {
-  /**
-   * @param {AbstractSigner} signer
-   * @param {Client} basicClient
-   */
   constructor(signer: AbstractSigner, basicClient: Client) {
     super(signer, basicClient);
   }
 
   /**
-   * @param {CreateAccountParams} params
-   * @returns {this}
-   * @throws {Error}
+   * Creates a new Hedera account.
+   * @param {CreateAccountParams} params Parameters for creating an account.
+   * @returns {this} The builder instance for chaining.
+   * @throws {Error} If required parameters are missing.
    */
   public createAccount(params: CreateAccountParams): this {
     const transaction = new AccountCreateTransaction();
 
-    if (params.key) {
-      if (typeof params.key === 'string') {
+    if (typeof params.key !== 'undefined') {
+      if (params.key === null) {
+        this.logger.warn(
+          'Received null for key in createAccount. A key or alias is typically required.'
+        );
+      } else if (typeof params.key === 'string') {
         transaction.setKey(PrivateKey.fromString(params.key));
       } else {
         transaction.setKey(params.key as Key);
       }
     }
 
-    if (params.initialBalance) {
-      if (typeof params.initialBalance === 'string') {
+    if (typeof params.initialBalance !== 'undefined') {
+      if (params.initialBalance === null) {
+        this.logger.warn('Received null for initialBalance in createAccount.');
+      } else if (typeof params.initialBalance === 'string') {
         transaction.setInitialBalance(Hbar.fromString(params.initialBalance));
       } else if (typeof params.initialBalance === 'number') {
         transaction.setInitialBalance(new Hbar(params.initialBalance));
@@ -77,46 +76,106 @@ export class AccountBuilder extends BaseServiceBuilder {
       }
     }
 
-    if (params.receiverSignatureRequired) {
-      transaction.setReceiverSignatureRequired(
-        params.receiverSignatureRequired
-      );
+    if (typeof params.receiverSignatureRequired !== 'undefined') {
+      if (params.receiverSignatureRequired === null) {
+        this.logger.warn(
+          'Received null for receiverSignatureRequired in createAccount.'
+        );
+      } else {
+        transaction.setReceiverSignatureRequired(
+          params.receiverSignatureRequired
+        );
+      }
     }
 
-    if (params.autoRenewPeriod) {
-      transaction.setAutoRenewPeriod(params.autoRenewPeriod);
+    if (typeof params.autoRenewPeriod !== 'undefined') {
+      if (params.autoRenewPeriod === null) {
+        this.logger.warn('Received null for autoRenewPeriod in createAccount.');
+      } else if (
+        typeof params.autoRenewPeriod === 'number' ||
+        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
+        params.autoRenewPeriod instanceof Long
+      ) {
+        transaction.setAutoRenewPeriod(params.autoRenewPeriod);
+      } else if (
+        typeof params.autoRenewPeriod === 'object' &&
+        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //@ts-ignore
+        typeof params.autoRenewPeriod.seconds === 'number'
+      ) {
+        transaction.setAutoRenewPeriod(
+          (params as unknown as { autoRenewPeriod: { seconds: number } })
+            .autoRenewPeriod.seconds
+        );
+      } else {
+        this.logger.warn(
+          'Invalid autoRenewPeriod in createAccount, using default.'
+        );
+        transaction.setAutoRenewPeriod(
+          DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS
+        );
+      }
     } else {
       transaction.setAutoRenewPeriod(DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS);
     }
 
-    if (params.memo) {
-      transaction.setAccountMemo(params.memo);
+    if (typeof params.memo !== 'undefined') {
+      if (params.memo === null) {
+        this.logger.warn('Received null for memo in createAccount.');
+      } else {
+        transaction.setAccountMemo(params.memo);
+      }
     }
 
-    if (params.maxAutomaticTokenAssociations) {
-      transaction.setMaxAutomaticTokenAssociations(
-        params.maxAutomaticTokenAssociations
-      );
+    if (typeof params.maxAutomaticTokenAssociations !== 'undefined') {
+      if (params.maxAutomaticTokenAssociations === null) {
+        this.logger.warn(
+          'Received null for maxAutomaticTokenAssociations in createAccount.'
+        );
+      } else {
+        transaction.setMaxAutomaticTokenAssociations(
+          params.maxAutomaticTokenAssociations
+        );
+      }
     }
 
-    if (params.stakedAccountId) {
-      transaction.setStakedAccountId(params.stakedAccountId);
+    if (typeof params.stakedAccountId !== 'undefined') {
+      if (params.stakedAccountId === null) {
+        this.logger.warn('Received null for stakedAccountId in createAccount.');
+      } else {
+        transaction.setStakedAccountId(params.stakedAccountId);
+      }
     }
 
-    if (params.stakedNodeId) {
-      transaction.setStakedNodeId(params.stakedNodeId);
+    if (typeof params.stakedNodeId !== 'undefined') {
+      if (params.stakedNodeId === null) {
+        this.logger.warn('Received null for stakedNodeId in createAccount.');
+      } else {
+        transaction.setStakedNodeId(params.stakedNodeId);
+      }
     }
 
-    if (params.declineStakingReward) {
-      transaction.setDeclineStakingReward(params.declineStakingReward);
+    if (typeof params.declineStakingReward !== 'undefined') {
+      if (params.declineStakingReward === null) {
+        this.logger.warn(
+          'Received null for declineStakingReward in createAccount.'
+        );
+      } else {
+        transaction.setDeclineStakingReward(params.declineStakingReward);
+      }
     }
 
-    if (params.alias) {
-      transaction.setAlias(params.alias);
+    if (typeof params.alias !== 'undefined') {
+      if (params.alias === null) {
+        this.logger.warn('Received null for alias in createAccount.');
+      } else {
+        transaction.setAlias(params.alias);
+      }
     }
 
     if (!params.key && !params.alias) {
-      console.warn(
+      this.logger.warn(
         'AccountCreateTransaction: Neither key nor a usable alias (PublicKey/EvmAddress) was provided. Transaction might fail.'
       );
     }
@@ -126,9 +185,10 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {HbarTransferParams} params
-   * @returns {this}
-   * @throws {Error}
+   * Transfers HBAR between accounts.
+   * @param {HbarTransferParams} params Parameters for the HBAR transfer.
+   * @returns {this} The builder instance for chaining.
+   * @throws {Error} If transfers are missing or do not sum to zero.
    */
   public transferHbar(params: HbarTransferParams): this {
     const transaction = new TransferTransaction();
@@ -136,9 +196,20 @@ export class AccountBuilder extends BaseServiceBuilder {
       throw new Error('HbarTransferParams must include at least one transfer.');
     }
     let netZeroInTinybars = new BigNumber(0);
-    for (const transfer of params.transfers) {
-      transaction.addHbarTransfer(transfer.accountId, transfer.amount);
-      const tinybarsContribution = transfer.amount.toTinybars();
+
+    for (const transferInput of params.transfers) {
+      const accountId =
+        typeof transferInput.accountId === 'string'
+          ? AccountId.fromString(transferInput.accountId)
+          : transferInput.accountId;
+
+      const sdkHbarAmount = Hbar.fromTinybars(
+        transferInput.amount as string | number
+      );
+
+      transaction.addHbarTransfer(accountId, sdkHbarAmount);
+
+      const tinybarsContribution = sdkHbarAmount.toTinybars();
       netZeroInTinybars = netZeroInTinybars.plus(
         tinybarsContribution.toString()
       );
@@ -148,17 +219,25 @@ export class AccountBuilder extends BaseServiceBuilder {
       throw new Error('The sum of all HBAR transfers must be zero.');
     }
 
-    if (params.memo) {
-      transaction.setTransactionMemo(params.memo);
+    if (typeof params.memo !== 'undefined') {
+      if (params.memo === null) {
+        this.logger.warn('Received null for memo in transferHbar.');
+      } else {
+        transaction.setTransactionMemo(params.memo);
+      }
     }
     this.setCurrentTransaction(transaction);
     return this;
   }
 
   /**
-   * @param {UpdateAccountParams} params
-   * @returns {this}
-   * @throws {Error}
+   * Updates an existing Hedera account.
+   * If an optional field in `params` is `undefined`, that aspect of the account is not changed.
+   * Specific string or number values (e.g., memo: "", stakedAccountId: "0.0.0", stakedNodeId: -1)
+   * provided by the LLM (and allowed by the Zod schema in the tool) will be applied directly.
+   * @param {UpdateAccountParams} params Parameters for updating an account.
+   * @returns {this} The builder instance for chaining.
+   * @throws {Error} If accountIdToUpdate is missing or key parsing fails.
    */
   public updateAccount(params: UpdateAccountParams): this {
     if (!params.accountIdToUpdate) {
@@ -168,44 +247,102 @@ export class AccountBuilder extends BaseServiceBuilder {
       params.accountIdToUpdate
     );
 
-    if (params.key) {
-      if (typeof params.key === 'string') {
-        transaction.setKey(PrivateKey.fromString(params.key).publicKey);
+    if (typeof params.key !== 'undefined') {
+      if (params.key === null) {
+        this.logger.warn('Received null for key, skipping update for key.');
+      } else if (typeof params.key === 'string') {
+        try {
+          transaction.setKey(PrivateKey.fromString(params.key));
+        } catch (e) {
+          this.logger.error(`Failed to parse key string: ${params.key}`, e);
+          throw new Error(`Invalid key string provided: ${params.key}`);
+        }
       } else {
         transaction.setKey(params.key as Key);
       }
     }
 
-    if (params.autoRenewPeriod) {
-      transaction.setAutoRenewPeriod(params.autoRenewPeriod);
+    if (typeof params.autoRenewPeriod !== 'undefined') {
+      if (params.autoRenewPeriod === null) {
+        this.logger.warn('Received null for autoRenewPeriod, skipping update.');
+      } else if (typeof params.autoRenewPeriod === 'number') {
+        transaction.setAutoRenewPeriod(params.autoRenewPeriod);
+      } else {
+        this.logger.warn(
+          `Invalid autoRenewPeriod format: ${JSON.stringify(
+            params.autoRenewPeriod
+          )}. Skipping.`
+        );
+      }
     }
 
-    if (params.receiverSignatureRequired) {
-      transaction.setReceiverSignatureRequired(
-        params.receiverSignatureRequired
-      );
+    if (typeof params.receiverSignatureRequired !== 'undefined') {
+      if (params.receiverSignatureRequired === null) {
+        this.logger.warn(
+          'Received null for receiverSignatureRequired, skipping update.'
+        );
+      } else {
+        transaction.setReceiverSignatureRequired(
+          params.receiverSignatureRequired
+        );
+      }
     }
 
-    if (params.stakedAccountId) {
-      transaction.setStakedAccountId(params.stakedAccountId);
+    if (typeof params.stakedAccountId !== 'undefined') {
+      if (params.stakedAccountId === null) {
+        this.logger.warn('Received null for stakedAccountId, skipping update.');
+      } else {
+        const saId = String(params.stakedAccountId);
+        if (saId === '0.0.0' || /^\d+\.\d+\.\d+$/.test(saId)) {
+          transaction.setStakedAccountId(saId);
+        } else {
+          this.logger.warn(
+            `Invalid stakedAccountId format: ${saId}. Skipping.`
+          );
+        }
+      }
     }
 
-    if (params.stakedNodeId) {
-      transaction.setStakedNodeId(params.stakedNodeId);
+    if (typeof params.stakedNodeId !== 'undefined') {
+      if (params.stakedNodeId === null) {
+        this.logger.warn('Received null for stakedNodeId, skipping update.');
+      } else {
+        transaction.setStakedNodeId(params.stakedNodeId);
+      }
     }
 
-    if (params.declineStakingReward) {
-      transaction.setDeclineStakingReward(params.declineStakingReward);
+    if (typeof params.declineStakingReward !== 'undefined') {
+      if (params.declineStakingReward === null) {
+        this.logger.warn(
+          'Received null for declineStakingReward, skipping update.'
+        );
+      } else {
+        transaction.setDeclineStakingReward(params.declineStakingReward);
+      }
     }
 
-    if (params.memo) {
-      transaction.setAccountMemo(params.memo);
+    if (typeof params.memo !== 'undefined') {
+      if (params.memo === null) {
+        this.logger.warn('Received null for memo, skipping update.');
+      } else {
+        transaction.setAccountMemo(params.memo);
+      }
     }
 
-    if (params.maxAutomaticTokenAssociations) {
-      transaction.setMaxAutomaticTokenAssociations(
-        params.maxAutomaticTokenAssociations
-      );
+    if (typeof params.maxAutomaticTokenAssociations !== 'undefined') {
+      if (params.maxAutomaticTokenAssociations === null) {
+        this.logger.warn(
+          'Received null for maxAutomaticTokenAssociations, skipping update.'
+        );
+      } else if (typeof params.maxAutomaticTokenAssociations === 'number') {
+        transaction.setMaxAutomaticTokenAssociations(
+          params.maxAutomaticTokenAssociations
+        );
+      } else {
+        this.logger.warn(
+          `Invalid type for maxAutomaticTokenAssociations: ${typeof params.maxAutomaticTokenAssociations}. Skipping.`
+        );
+      }
     }
 
     this.setCurrentTransaction(transaction);
@@ -213,9 +350,10 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {DeleteAccountParams} params
-   * @returns {this}
-   * @throws {Error}
+   * Deletes an existing Hedera account.
+   * @param {DeleteAccountParams} params Parameters for deleting an account.
+   * @returns {this} The builder instance for chaining.
+   * @throws {Error} If required parameters are missing.
    */
   public deleteAccount(params: DeleteAccountParams): this {
     if (!params.deleteAccountId) {
@@ -234,8 +372,9 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {ApproveHbarAllowanceParams} params
-   * @returns {this}
+   * Approves an HBAR allowance for a spender.
+   * @param {ApproveHbarAllowanceParams} params Parameters for approving HBAR allowance.
+   * @returns {this} The builder instance for chaining.
    */
   public approveHbarAllowance(params: ApproveHbarAllowanceParams): this {
     const transaction =
@@ -249,9 +388,10 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {ApproveTokenNftAllowanceParams} params
-   * @returns {this}
-   * @throws {Error}
+   * Approves an NFT allowance for a spender.
+   * @param {ApproveTokenNftAllowanceParams} params Parameters for approving NFT allowance.
+   * @returns {this} The builder instance for chaining.
+   * @throws {Error} If NFT allowance parameters are invalid.
    */
   public approveTokenNftAllowance(
     params: ApproveTokenNftAllowanceParams
@@ -277,7 +417,7 @@ export class AccountBuilder extends BaseServiceBuilder {
         } else if (serial instanceof BigNumber) {
           serialLong = Long.fromString(serial.toString());
         } else {
-          serialLong = serial;
+          serialLong = serial as Long;
         }
         transaction.approveTokenNftAllowance(
           new NftId(tokenId, serialLong),
@@ -291,8 +431,12 @@ export class AccountBuilder extends BaseServiceBuilder {
       );
     }
 
-    if (params.memo) {
-      transaction.setTransactionMemo(params.memo);
+    if (typeof params.memo !== 'undefined') {
+      if (params.memo === null) {
+        this.logger.warn('Received null for memo in approveTokenNftAllowance.');
+      } else {
+        transaction.setTransactionMemo(params.memo);
+      }
     }
 
     this.setCurrentTransaction(transaction);
@@ -300,8 +444,9 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {ApproveFungibleTokenAllowanceParams} params
-   * @returns {this}
+   * Approves a fungible token allowance for a spender.
+   * @param {ApproveFungibleTokenAllowanceParams} params Parameters for approving fungible token allowance.
+   * @returns {this} The builder instance for chaining.
    */
   public approveFungibleTokenAllowance(
     params: ApproveFungibleTokenAllowanceParams
@@ -319,7 +464,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     } else if (params.amount instanceof BigNumber) {
       amountLong = Long.fromString(params.amount.toString());
     } else {
-      amountLong = params.amount;
+      amountLong = params.amount as Long;
     }
 
     const transaction =
@@ -334,43 +479,44 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * Deletes all NFT allowances for a specific token collection between an owner and a spender.
-   * @param {DeleteNftSpenderAllowanceParams} params
-   * @returns {this}
+   * Deletes NFT allowances.
+   * Note: This method is currently stubbed and non-functional due to SDK considerations.
+   * @returns {this} The builder instance.
+   * @throws {Error} Method is temporarily disabled.
    */
   public deleteNftSpenderAllowance(
     params: DeleteNftSpenderAllowanceParams
   ): this {
-    this.logger.warn('deleteNftSpenderAllowance is currently non-functional pending SDK signature clarification/refactor.');
-    // const tokenIdentity =
-    //   typeof params.tokenId === 'string'
-    //     ? TokenId.fromString(params.tokenId)
-    //     : params.tokenId;
-    // const owner = params.ownerAccountId || this.signer.getAccountId();
-    // const spender = 
-    //   typeof params.spenderAccountId === 'string'
-    //     ? AccountId.fromString(params.spenderAccountId)
-    //     : params.spenderAccountId;
+    const nftId =
+      typeof params.nftId === 'string'
+        ? NftId.fromString(params.nftId)
+        : params.nftId;
+    const owner = params.ownerAccountId || this.signer.getAccountId();
 
-    // const transaction =
-    //   new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
-    //     tokenIdentity, 
-    //     owner,
-    //     // spender // TODO: SDK signature for 3 args was problematic. Verify.
-    //   );
-    
-    // if (params.memo) {
-    //     transaction.setTransactionMemo(params.memo);
-    // }
+    const transaction =
+      new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
+        nftId,
+        owner
+      );
 
-    // this.setCurrentTransaction(transaction);
-    throw new Error('deleteNftSpenderAllowance is temporarily disabled.')
+    if (typeof params.memo !== 'undefined') {
+      if (params.memo === null) {
+        this.logger.warn(
+          'Received null for memo in deleteNftSpenderAllowance.'
+        );
+      } else {
+        transaction.setTransactionMemo(params.memo);
+      }
+    }
+
+    this.setCurrentTransaction(transaction);
     return this;
   }
 
   /**
-   * @param {RevokeHbarAllowanceParams} params
-   * @returns {this}
+   * Revokes an HBAR allowance.
+   * @param {RevokeHbarAllowanceParams} params Parameters for revoking HBAR allowance.
+   * @returns {this} The builder instance for chaining.
    */
   public revokeHbarAllowance(params: RevokeHbarAllowanceParams): this {
     const transaction =
@@ -384,8 +530,9 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * @param {RevokeFungibleTokenAllowanceParams} params
-   * @returns {this}
+   * Revokes a fungible token allowance.
+   * @param {RevokeFungibleTokenAllowanceParams} params Parameters for revoking fungible token allowance.
+   * @returns {this} The builder instance for chaining.
    */
   public revokeFungibleTokenAllowance(
     params: RevokeFungibleTokenAllowanceParams
@@ -406,29 +553,81 @@ export class AccountBuilder extends BaseServiceBuilder {
   }
 
   /**
-   * Deletes all NFT allowances for all serials of a given token type granted by an owner.
-   * This effectively removes allowances for all spenders for that token from the specified owner.
-   * @param {DeleteNftAllowanceAllSerialsParams} params
-   * @returns {this}
+   * Deletes all allowances for a specific NFT serial (for all spenders), granted by an owner.
+   * The transaction must be signed by the owner of the NFTs.
+   * @param {DeleteNftSerialAllowancesParams} params - Parameters for the operation.
+   * @returns {this} The builder instance for chaining.
    */
-  public deleteNftAllowanceAllSerials(
-    params: DeleteNftAllowanceAllSerialsParams
+  public deleteNftSerialAllowancesForAllSpenders(
+    params: DeleteNftSerialAllowancesParams
   ): this {
-    const tokenIdentity =
-      typeof params.tokenId === 'string'
-        ? TokenId.fromString(params.tokenId)
-        : params.tokenId;
-    const nftIdForOperation = new NftId(tokenIdentity, Long.ZERO); 
-    const owner = params.ownerAccountId || this.signer.getAccountId();
+    const ownerAccId = params.ownerAccountId 
+      ? (typeof params.ownerAccountId === 'string' ? AccountId.fromString(params.ownerAccountId) : params.ownerAccountId) 
+      : this.signer.getAccountId();
+
+    // Parse the nftIdString (e.g., "0.0.123.45") into an NftId object
+    const parts = params.nftIdString.split('.');
+    if (parts.length !== 4) {
+      throw new Error(`Invalid nftIdString format: ${params.nftIdString}. Expected format like "0.0.token.serial".`);
+    }
+    const sdkTokenId = TokenId.fromString(`${parts[0]}.${parts[1]}.${parts[2]}`);
+    const sdkSerial = Long.fromString(parts[3]);
+    const sdkNftId = new NftId(sdkTokenId, sdkSerial);
 
     const transaction =
       new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
-        nftIdForOperation, 
-        owner              
+        sdkNftId, // Use the parsed NftId
+        ownerAccId
       );
-    
+
     if (params.memo) {
         transaction.setTransactionMemo(params.memo);
+    }
+
+    this.setCurrentTransaction(transaction);
+    return this;
+  }
+
+  /**
+   * Deletes/revokes NFT allowances for specific serial numbers of a token for a specific spender.
+   * The transaction must be signed by the owner of the NFTs.
+   * @param {DeleteNftSpenderAllowanceToolParams} params - Parameters for the operation.
+   * @returns {this} The builder instance for chaining.
+   */
+  public deleteTokenNftAllowanceForSpender(
+    params: DeleteNftSpenderAllowanceToolParams
+  ): this {
+    let ownerAccIdToUse: AccountId;
+    if (params.ownerAccountId) {
+      ownerAccIdToUse =
+        typeof params.ownerAccountId === 'string'
+          ? AccountId.fromString(params.ownerAccountId)
+          : params.ownerAccountId;
+    } else {
+      ownerAccIdToUse = this.signer.getAccountId();
+    }
+
+    const sdkTokenId =
+      typeof params.tokenId === 'string'
+        ? TokenId.fromString(params.tokenId)
+        : params.tokenId;
+
+    const sdkSerials: Long[] = params.serials.map(
+      (s: string | number | Long) => {
+        if (typeof s === 'string') return Long.fromString(s);
+        if (typeof s === 'number') return Long.fromNumber(s);
+        return s;
+      }
+    );
+
+    const transaction =
+      new AccountAllowanceDeleteTransaction().deleteAllTokenNftAllowances(
+        new NftId(sdkTokenId, sdkSerials[0]),
+        ownerAccIdToUse
+      );
+
+    if (params.memo) {
+      transaction.setTransactionMemo(params.memo);
     }
 
     this.setCurrentTransaction(transaction);

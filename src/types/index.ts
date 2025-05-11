@@ -670,7 +670,7 @@ export interface TokenFeeScheduleUpdateParams {
  */
 export interface CreateAccountParams {
   /** The initial balance of the new account in HBAR. Defaults to 0 if not specified. */
-  initialBalance?: number | BigNumber;
+  initialBalance?: number | BigNumber | undefined;
   /**
    * The public key for the new account.
    * Can be a PublicKey object or a string representation of a PrivateKey
@@ -1090,11 +1090,29 @@ export interface TopicInfoResult {
 export interface DeleteNftSpenderAllowanceParams {
   /** The account ID of the NFT owner. Defaults to the operator/signer account ID if not provided. */
   ownerAccountId?: string | AccountId;
-  /** The account ID of the spender whose allowance is to be revoked for the specified token. */
-  spenderAccountId: string | AccountId;
   /** The ID of the NFT collection (token ID). */
-  tokenId: string | TokenId;
+  nftId: string | NftId;
   /** Optional. A memo for the transaction. */
+  memo?: string;
+}
+
+/**
+ * Parameters for deleting/revoking NFT allowances for specific serials for a specific spender.
+ */
+export interface DeleteNftSpenderAllowanceToolParams {
+  ownerAccountId?: string | AccountId; 
+  spenderAccountId: string | AccountId;
+  tokenId: string | TokenId;
+  serials: Array<number | string | Long>;
+  memo?: string;
+}
+
+/**
+ * Parameters for deleting all spender allowances for a specific NFT serial, granted by an owner.
+ */
+export interface DeleteNftSerialAllowancesParams {
+  ownerAccountId?: string | AccountId;
+  nftIdString: string; // e.g., "0.0.tokenid.serial"
   memo?: string;
 }
 

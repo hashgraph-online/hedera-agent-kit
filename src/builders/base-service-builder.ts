@@ -6,7 +6,11 @@ import {
   TransactionReceipt,
   ScheduleCreateTransaction,
   ScheduleId,
-  Key
+  Key,
+  PublicKey,
+  PrivateKey,
+  KeyList,
+  Long,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../signer/abstract-signer';
@@ -30,6 +34,7 @@ export interface ExecuteResult {
 export abstract class BaseServiceBuilder {
   protected currentTransaction: Transaction | null = null;
   protected logger: Logger;
+  protected originalSigner: AbstractSigner;
 
   /**
    * @param {AbstractSigner} signer
@@ -37,8 +42,9 @@ export abstract class BaseServiceBuilder {
    */
   constructor(
     protected readonly signer: AbstractSigner,
-    protected readonly basicClient: Client,
+    protected readonly basicClient: Client
   ) {
+    this.originalSigner = signer;
     this.logger = new Logger({
       module: 'ServiceBuilder',
       level: 'info',
@@ -110,17 +116,21 @@ export abstract class BaseServiceBuilder {
     if (!innerTransaction) {
       return {
         success: false,
-        error: 'No transaction to execute. Call a specific transaction method first.',
+        error:
+          'No transaction to execute. Call a specific transaction method first.',
       };
     }
 
     let transactionToExecute: Transaction = innerTransaction;
-    let originalTransactionIdForReporting = innerTransaction.transactionId?.toString();
+    let originalTransactionIdForReporting =
+      innerTransaction.transactionId?.toString();
 
     if (options?.schedule) {
       this.logger.info('Scheduling transaction...');
-      const scheduleCreateTx = new ScheduleCreateTransaction()
-        .setScheduledTransaction(innerTransaction);
+      const scheduleCreateTx =
+        new ScheduleCreateTransaction().setScheduledTransaction(
+          innerTransaction
+        );
 
       if (options.scheduleMemo) {
         scheduleCreateTx.setScheduleMemo(options.scheduleMemo);
@@ -140,11 +150,14 @@ export abstract class BaseServiceBuilder {
       if (!transactionToExecute.transactionId) {
         await transactionToExecute.freezeWith(this.basicClient);
       }
-      originalTransactionIdForReporting = transactionToExecute.transactionId?.toString();
+      originalTransactionIdForReporting =
+        transactionToExecute.transactionId?.toString();
     }
 
     try {
-      const receipt = await this.signer.signAndExecuteTransaction(transactionToExecute);
+      const receipt = await this.signer.signAndExecuteTransaction(
+        transactionToExecute
+      );
 
       const result: ExecuteResult = {
         success: true,
@@ -157,11 +170,14 @@ export abstract class BaseServiceBuilder {
       }
 
       return result;
-    } catch (error: any) {
+    } catch (e: unknown) {
+      const error = e as Error;
       this.logger.error(`Transaction execution failed: ${error.message}`);
       const errorResult: ExecuteResult = {
         success: false,
-        error: error.message || 'An unknown error occurred during transaction execution.',
+        error:
+          error.message ||
+          'An unknown error occurred during transaction execution.',
         transactionId: originalTransactionIdForReporting,
       };
       return errorResult;
@@ -184,15 +200,19 @@ export abstract class BaseServiceBuilder {
     scheduleAdminKey?: Key;
   }): Promise<string> {
     if (!this.currentTransaction) {
-      throw new Error('No transaction to get bytes for. Call a specific transaction method first.');
+      throw new Error(
+        'No transaction to get bytes for. Call a specific transaction method first.'
+      );
     }
 
     let transactionForBytes: Transaction = this.currentTransaction;
 
     if (options?.schedule) {
       this.logger.info('Preparing bytes for scheduled transaction...');
-      const scheduleCreateTx = new ScheduleCreateTransaction()
-        .setScheduledTransaction(this.currentTransaction);
+      const scheduleCreateTx =
+        new ScheduleCreateTransaction().setScheduledTransaction(
+          this.currentTransaction
+        );
 
       if (options.scheduleMemo) {
         scheduleCreateTx.setScheduleMemo(options.scheduleMemo);
@@ -210,10 +230,62 @@ export abstract class BaseServiceBuilder {
       transactionForBytes = scheduleCreateTx;
     }
 
-    if (!transactionForBytes.isFrozen()) {
-      transactionForBytes = transactionForBytes.freezeWith(this.basicClient);
-    }
     return Buffer.from(transactionForBytes.toBytes()).toString('base64');
+  }
+
+  /**
+   * Executes the current transaction using a provided signer.
+   * This is useful if the transaction needs to be signed and paid for by a different account
+   * than the one initially configured with the HederaAgentKit/builder instance.
+   * Note: The transaction should ideally not be frozen, or if frozen, its transactionId
+   * should be compatible with the newSigner's accountId as the payer.
+   * If the transaction is already frozen with a different payer, this method will attempt
+   * to re-build and re-freeze.
+   * @param {AbstractSigner} newSigner - The signer to use for this specific execution.
+   * @returns {Promise<ExecuteResult>}
+   * @throws {Error}
+   */
+  public async executeWithSigner(
+    newSigner: AbstractSigner
+  ): Promise<ExecuteResult> {
+    if (!this.currentTransaction) {
+      return {
+        success: false,
+        error:
+          'No transaction to execute. Call a specific transaction method first.',
+      };
+    }
+
+    let transactionToExecute = this.currentTransaction;
+
+    if (transactionToExecute.isFrozen()) {
+      throw new Error(
+        'Transaction is frozen, try to call the builder method again and then executeWithSigner.'
+      );
+    }
+
+    try {
+      const receipt = await newSigner.signAndExecuteTransaction(
+        transactionToExecute
+      );
+      const transactionId = transactionToExecute.transactionId?.toString();
+      return {
+        success: true,
+        receipt: receipt,
+        transactionId: transactionId,
+      };
+    } catch (e: unknown) {
+      const error = e as Error;
+      this.logger.error(
+        `Transaction execution with new signer failed: ${error.message}`
+      );
+      return {
+        success: false,
+        error:
+          error.message ||
+          'An unknown error occurred during transaction execution with new signer.',
+      };
+    }
   }
 
   /**
@@ -221,5 +293,93 @@ export abstract class BaseServiceBuilder {
    */
   protected setCurrentTransaction(transaction: Transaction): void {
     this.currentTransaction = transaction;
+  }
+
+  /**
+   * Retrieves the current transaction object being built.
+   * @returns {Transaction | null} The current transaction or null.
+   */
+  public getCurrentTransaction(): Transaction | null {
+    return this.currentTransaction;
+  }
+
+  protected async parseKey(
+    keyInput?: string | PublicKey | Key | null
+  ): Promise<Key | undefined> {
+    if (keyInput === undefined || keyInput === null) {
+      return undefined;
+    }
+    if (
+      typeof keyInput === 'object' &&
+      ('_key' in keyInput ||
+        keyInput instanceof PublicKey ||
+        keyInput instanceof PrivateKey ||
+        keyInput instanceof KeyList)
+    ) {
+      return keyInput as Key;
+    }
+    if (typeof keyInput === 'string') {
+      if (keyInput.toLowerCase() === 'current_signer') {
+        if (this.signer) {
+          this.logger.info(
+            `[BaseServiceBuilder.parseKey] Substituting "current_signer" with signer's public key.`
+          );
+          return await this.signer.getPublicKey();
+        } else {
+          throw new Error(
+            '[BaseServiceBuilder.parseKey] Signer is not available to resolve "current_signer".'
+          );
+        }
+      }
+      try {
+        return PublicKey.fromString(keyInput);
+      } catch (e: unknown) {
+        const error = e as Error;
+        try {
+          this.logger.warn(
+            '[BaseServiceBuilder.parseKey] Attempting to parse key string as PrivateKey to derive PublicKey. This is generally not recommended for public-facing keys.',
+            { error: error.message }
+          );
+          return PrivateKey.fromString(keyInput);
+        } catch (e2: unknown) {
+          const error2 = e2 as Error;
+          this.logger.error(
+            `[BaseServiceBuilder.parseKey] Failed to parse key string as PublicKey or PrivateKey: ${keyInput.substring(
+              0,
+              30
+            )}...`,
+            { error: error2.message }
+          );
+          throw new Error(
+            `[BaseServiceBuilder.parseKey] Invalid key string format: ${keyInput.substring(
+              0,
+              30
+            )}...`
+          );
+        }
+      }
+    }
+    this.logger.warn(
+      `[BaseServiceBuilder.parseKey] Received an object that is not an SDK Key instance or a recognized string format: ${JSON.stringify(
+        keyInput
+      )}`
+    );
+    return undefined;
+  }
+
+  protected parseAmount(amount?: number | string | Long | BigNumber): Long {
+    if (amount === undefined) {
+      return Long.fromNumber(0);
+    }
+    if (typeof amount === 'number') {
+      return Long.fromNumber(amount);
+    }
+    if (typeof amount === 'string') {
+      return Long.fromString(amount);
+    }
+    if (amount instanceof BigNumber) {
+      return Long.fromString(amount.toString());
+    }
+    return amount;
   }
 }

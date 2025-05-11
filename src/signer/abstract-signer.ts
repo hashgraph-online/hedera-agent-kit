@@ -4,6 +4,7 @@ import {
   Transaction,
   TransactionReceipt,
   PrivateKey,
+  Client,
 } from '@hashgraph/sdk';
 import {
   HederaMirrorNode,
@@ -76,9 +77,16 @@ export abstract class AbstractSigner {
    * Retrieves the operator's private key.
    * This is needed by HederaAgentKit to set the operator on its internal client.
    * Concrete implementations must provide this.
-   * @returns {string | PrivateKey} The operator's private key.
+   * @returns {PrivateKey} The operator's private key.
    */
-  public abstract getOperatorPrivateKey(): string | PrivateKey;
+  public abstract getOperatorPrivateKey(): PrivateKey;
+
+  /**
+   * Retrieves the client instance configured for this signer.
+   * This is needed for operations like freezing transactions with the correct payer.
+   * @returns {Client} The Hedera Client object.
+   */
+  public abstract getClient(): Client;
 
   /**
    * Initializes the HederaMirrorNode instance for the signer.

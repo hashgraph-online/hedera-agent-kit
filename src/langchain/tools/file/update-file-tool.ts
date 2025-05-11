@@ -1,9 +1,5 @@
 import { z } from 'zod';
-import { HederaAgentKit } from '../../../agent';
-import { UpdateFileParams, Key } from '../../../types';
-import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
-import { FileId, KeyList } from '@hashgraph/sdk'; // Added KeyList
-import { Buffer } from 'buffer';
+import { UpdateFileParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -19,19 +15,20 @@ const UpdateFileZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'Optional. New contents for the file. Provide as UTF-8 string or base64 encoded for binary. Replaces entire content.'
+      'Optional. New file contents. For binary, use base64. Builder decodes & replaces content.'
     ),
-  isBase64: z
-    .boolean()
-    .optional()
-    .describe('Set to true if new contents string is base64 encoded.'),
-  keysJson: z
-    .string()
+  keys: z
+    .array(z.string())
+    .nullable()
     .optional()
     .describe(
-      'Optional. New keys as a JSON string array of public/private key strings. Send "null" or empty array string "[]" to clear all keys, making file immutable (if no other keys like adminKey on file).'
+      'Optional. New keys (array of serialized strings). Pass null or empty array to clear. Builder parses.'
     ),
-  // memo is handled by metaOptions.transactionMemo in the base tool
+  memo: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('Optional. New file memo. Pass null or empty string to clear.'),
 });
 
 export class HederaUpdateFileTool extends BaseHederaTransactionTool<
@@ -39,7 +36,7 @@ export class HederaUpdateFileTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-file-update';
   description =
-    "Updates a file's attributes (contents, keys, memo). Requires fileId. Use metaOptions for execution control (transactionMemo for file memo).";
+    "Updates a file's attributes (contents, keys, memo). Builder handles parsing and clearing logic.";
   specificInputSchema = UpdateFileZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -54,47 +51,8 @@ export class HederaUpdateFileTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof UpdateFileZodSchemaCore>
   ): Promise<void> {
-    const updateParams: UpdateFileParams = { fileId: specificArgs.fileId };
-
-    if (specificArgs.contents) {
-      if (specificArgs.isBase64) {
-        try {
-          updateParams.contents = Buffer.from(specificArgs.contents, 'base64');
-        } catch (e) {
-          this.logger.error(
-            'Failed to decode base64 contents for file update.',
-            e
-          );
-          throw new Error('Invalid base64 string for file contents.');
-        }
-      } else {
-        updateParams.contents = specificArgs.contents;
-      }
-    }
-
-    if (specificArgs.keysJson) {
-      if (
-        specificArgs.keysJson.toLowerCase() === 'null' ||
-        specificArgs.keysJson === '[]'
-      ) {
-        updateParams.keys = null; // Signal to builder to clear keys
-      } else {
-        try {
-          const parsedKeys = JSON.parse(specificArgs.keysJson) as string[];
-          if (Array.isArray(parsedKeys)) {
-            updateParams.keys = parsedKeys; // Builder handles string[] to Array<string | Key | KeyList>
-          }
-        } catch (e) {
-          this.logger.warn(
-            'Failed to parse keysJson string for UpdateFile, skipping key update.',
-            e
-          );
-        }
-      }
-    }
-    // File memo is set via metaOptions.transactionMemo by the base tool class.
-    // The FileBuilder's updateFile method should ensure this is passed to transaction.setFileMemo().
-
-    (builder as FileBuilder).updateFile(updateParams);
+    await (builder as FileBuilder).updateFile(
+      specificArgs as unknown as UpdateFileParams
+    );
   }
 }

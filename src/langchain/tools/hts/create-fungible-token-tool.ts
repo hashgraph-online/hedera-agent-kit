@@ -1,14 +1,67 @@
 import { z } from 'zod';
 import { FTCreateParams } from '../../../types';
 import { TokenSupplyType as SDKTokenSupplyType } from '@hashgraph/sdk';
-import { BigNumber } from 'bignumber.js';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
 } from '../common/base-hedera-transaction-tool';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 import { HtsBuilder } from '../../../builders/hts/hts-builder';
-import { parseCustomFeesJson } from './hts-tool-utils';
+
+const FixedFeeInputSchema = z.object({
+  type: z.literal('FIXED'),
+  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  denominatingTokenId: z
+    .string()
+    .optional()
+    .describe('Denominating token ID for the fee (if not HBAR).'),
+  amount: z
+    .union([z.number(), z.string()])
+    .describe('Fee amount (smallest unit for tokens, or tinybars for HBAR).'),
+});
+
+const FractionalFeeInputSchema = z.object({
+  type: z.literal('FRACTIONAL'),
+  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  numerator: z.number().int().describe('Numerator of the fractional fee.'),
+  denominator: z
+    .number()
+    .int()
+    .positive()
+    .describe('Denominator of the fractional fee.'),
+  minAmount: z
+    .union([z.number(), z.string()])
+    .optional()
+    .describe('Minimum fractional fee amount.'),
+  maxAmount: z
+    .union([z.number(), z.string()])
+    .optional()
+    .describe('Maximum fractional fee amount (0 for no max).'),
+  assessmentMethodInclusive: z
+    .boolean()
+    .optional()
+    .describe('Fee is assessed on net amount (false) or gross (true).'),
+});
+
+const RoyaltyFeeInputSchema = z.object({
+  type: z.literal('ROYALTY'),
+  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  numerator: z.number().int().describe('Numerator of the royalty fee.'),
+  denominator: z
+    .number()
+    .int()
+    .positive()
+    .describe('Denominator of the royalty fee.'),
+  fallbackFee: FixedFeeInputSchema.omit({ type: true })
+    .optional()
+    .describe('Fallback fixed fee if royalty is not applicable.'),
+});
+
+const CustomFeeInputUnionSchema = z.discriminatedUnion('type', [
+  FixedFeeInputSchema,
+  FractionalFeeInputSchema,
+  RoyaltyFeeInputSchema,
+]);
 
 const FTCreateZodSchemaCore = z.object({
   tokenName: z.string().describe('The publicly visible name of the token.'),
@@ -18,51 +71,72 @@ const FTCreateZodSchemaCore = z.object({
     .describe('Treasury account ID (e.g., "0.0.xxxx").'),
   initialSupply: z
     .union([z.number(), z.string()])
-    .describe(
-      'Initial supply in the smallest denomination (number or string for large numbers).'
-    ),
-  decimals: z.number().int().describe('Number of decimal places.'),
+    .describe('Initial supply in the smallest denomination.'),
+  decimals: z
+    .number()
+    .int()
+    .describe('Number of decimal places for the token.'),
   adminKey: z
     .string()
     .optional()
-    .describe('Admin key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. Admin key (serialized string). Builder handles parsing.'
+    ),
   kycKey: z
     .string()
     .optional()
-    .describe('KYC key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. KYC key (serialized string). Builder handles parsing.'
+    ),
   freezeKey: z
     .string()
     .optional()
-    .describe('Freeze key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. Freeze key (serialized string). Builder handles parsing.'
+    ),
   wipeKey: z
     .string()
     .optional()
-    .describe('Wipe key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. Wipe key (serialized string). Builder handles parsing.'
+    ),
   supplyKey: z
     .string()
     .optional()
-    .describe('Supply key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. Supply key (serialized string). Builder handles parsing.'
+    ),
   feeScheduleKey: z
     .string()
     .optional()
-    .describe('Fee schedule key (serialized string, or "current_signer").'),
+    .describe(
+      'Optional. Fee schedule key (serialized string). Builder handles parsing.'
+    ),
   pauseKey: z
     .string()
     .optional()
-    .describe('Pause key (serialized string, or "current_signer").'),
-  autoRenewAccountId: z.string().optional().describe('Auto-renew account ID.'),
-  autoRenewPeriod: z
-    .number()
-    .optional()
-    .describe('Auto-renewal period in seconds.'),
-  memo: z.string().optional().describe('Token memo.'),
-  freezeDefault: z.boolean().optional().describe('Default freeze status.'),
-  customFees: z
+    .describe(
+      'Optional. Pause key (serialized string). Builder handles parsing.'
+    ),
+  autoRenewAccountId: z
     .string()
     .optional()
-    .describe(
-      'Custom fees as a JSON string (array of CustomFee-like objects).'
-    ),
+    .describe('Optional. Auto-renew account ID (e.g., "0.0.xxxx").'),
+  autoRenewPeriod: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Optional. Auto-renewal period in seconds.'),
+  memo: z.string().optional().describe('Optional. Memo for the token.'),
+  freezeDefault: z
+    .boolean()
+    .optional()
+    .describe('Optional. Default freeze status for accounts.'),
+  customFees: z
+    .array(CustomFeeInputUnionSchema)
+    .optional()
+    .describe('Optional. Array of custom fee objects for the token.'),
   supplyType: z
     .enum([
       SDKTokenSupplyType.Finite.toString(),
@@ -72,7 +146,9 @@ const FTCreateZodSchemaCore = z.object({
   maxSupply: z
     .union([z.number(), z.string()])
     .optional()
-    .describe('Max supply if supplyType is FINITE (number or string).'),
+    .describe(
+      'Max supply if supplyType is FINITE. Builder validates against initialSupply.'
+    ),
 });
 
 export class HederaCreateFungibleTokenTool extends BaseHederaTransactionTool<
@@ -80,7 +156,7 @@ export class HederaCreateFungibleTokenTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-hts-create-fungible-token';
   description =
-    'Creates a new Hedera Fungible Token (FT). Provide token details. Use metaOptions for execution control.';
+    'Creates a new Hedera Fungible Token (FT). Builder handles key parsing, fee construction, and supply validation.';
   specificInputSchema = FTCreateZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -95,24 +171,8 @@ export class HederaCreateFungibleTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof FTCreateZodSchemaCore>
   ): Promise<void> {
-    const ftParams: FTCreateParams = {
-      tokenName: specificArgs.tokenName,
-      tokenSymbol: specificArgs.tokenSymbol,
-      treasuryAccountId: specificArgs.treasuryAccountId,
-      initialSupply:
-        typeof specificArgs.initialSupply === 'string'
-          ? new BigNumber(specificArgs.initialSupply)
-          : specificArgs.initialSupply,
-      decimals: specificArgs.decimals,
-      supplyType:
-        specificArgs.supplyType === SDKTokenSupplyType.Finite.toString()
-          ? SDKTokenSupplyType.Finite
-          : SDKTokenSupplyType.Infinite,
-      customFees: specificArgs.customFees
-        ? parseCustomFeesJson(specificArgs.customFees, this.logger)
-        : undefined,
-    };
-
-    await (builder as HtsBuilder).createFungibleToken(ftParams);
+    await (builder as HtsBuilder).createFungibleToken(
+      specificArgs as unknown as FTCreateParams
+    );
   }
 }

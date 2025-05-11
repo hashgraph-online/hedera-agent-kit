@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { CreateFileParams } from '../../../types';
-import { Buffer } from 'buffer';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -12,18 +11,15 @@ const CreateFileZodSchemaCore = z.object({
   contents: z
     .string()
     .describe(
-      'The contents of the file. Provide as a UTF-8 string or base64 encoded string for binary data.'
+      'File contents. For binary data, provide as base64 encoded string. Builder handles decoding.'
     ),
-  isBase64: z
-    .boolean()
-    .optional()
-    .describe('Set to true if the contents string is base64 encoded.'),
-  keysJson: z
-    .string()
+  keys: z
+    .array(z.string())
     .optional()
     .describe(
-      'Optional. A JSON string representing an array of public key strings (hex or DER) or private key strings (hex) that can modify/delete the file.'
+      'Optional. Array of serialized key strings (e.g., private key hex, public key hex/DER) that can modify/delete the file. Builder handles parsing.'
     ),
+  memo: z.string().optional().describe('Optional. Memo for the file.'),
 });
 
 export class HederaCreateFileTool extends BaseHederaTransactionTool<
@@ -31,7 +27,7 @@ export class HederaCreateFileTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-file-create';
   description =
-    'Creates a new file on the Hedera File Service. Provide contents (string or base64). Optionally set keys. Use metaOptions for execution control (especially transactionMemo for file memo).';
+    'Creates a new file. Builder handles content decoding and key parsing.';
   specificInputSchema = CreateFileZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -46,37 +42,8 @@ export class HederaCreateFileTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof CreateFileZodSchemaCore>
   ): Promise<void> {
-    let fileContents: string | Uint8Array = specificArgs.contents;
-    if (specificArgs.isBase64) {
-      try {
-        fileContents = Buffer.from(specificArgs.contents, 'base64');
-      } catch (e) {
-        this.logger.error(
-          'Failed to decode base64 contents for file creation.',
-          e
-        );
-        throw new Error('Invalid base64 string for file contents.');
-      }
-    }
-
-    const fileParams: CreateFileParams = {
-      contents: fileContents,
-    };
-
-    if (specificArgs.keysJson) {
-      try {
-        const parsedKeys = JSON.parse(specificArgs.keysJson) as string[];
-        if (Array.isArray(parsedKeys)) {
-          fileParams.keys = parsedKeys;
-        }
-      } catch (e) {
-        this.logger.warn(
-          'Failed to parse keysJson string for CreateFile, skipping keys.',
-          e
-        );
-      }
-    }
-
-    (builder as FileBuilder).createFile(fileParams);
+    await (builder as FileBuilder).createFile(
+      specificArgs as unknown as CreateFileParams
+    );
   }
 }

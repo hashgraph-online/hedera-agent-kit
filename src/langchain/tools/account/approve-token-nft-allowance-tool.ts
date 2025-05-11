@@ -1,7 +1,5 @@
 import { z } from 'zod';
 import { ApproveTokenNftAllowanceParams } from '../../../types';
-import { Long } from '@hashgraph/sdk';
-import { BigNumber } from 'bignumber.js'; // For parsing serials if provided as strings by LLM
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -14,24 +12,25 @@ const ApproveTokenNftAllowanceZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'The NFT owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
+      'Optional. The NFT owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
     ),
   spenderAccountId: z
     .string()
     .describe('The spender account ID (e.g., "0.0.yyyy").'),
   tokenId: z.string().describe('The NFT collection ID (e.g., "0.0.zzzz").'),
   serials: z
-    .array(z.union([z.number(), z.string()]))
+    .array(z.union([z.number().int().positive(), z.string()]))
     .optional()
     .describe(
-      'Optional. Specific serial numbers (as numbers or strings) to approve. Use this OR allSerials.'
+      'Optional. Specific serial numbers to approve. Use this OR allSerials. Builder handles conversion.'
     ),
   allSerials: z
     .boolean()
     .optional()
     .describe(
-      'Optional. If true, approves the spender for all serials of the given NFT ID. Use this OR serials.'
+      'Optional. If true, approves spender for all serials of the NFT ID. Use this OR serials.'
     ),
+  memo: z.string().optional().describe('Optional. Memo for the transaction.'),
 });
 
 export class HederaApproveTokenNftAllowanceTool extends BaseHederaTransactionTool<
@@ -39,7 +38,7 @@ export class HederaApproveTokenNftAllowanceTool extends BaseHederaTransactionToo
 > {
   name = 'hedera-account-approve-nft-allowance';
   description =
-    'Approves an NFT allowance. Requires spenderAccountId, tokenId, and EITHER a list of serials OR allSerials=true. ownerAccountId defaults to operator. Use metaOptions for execution control.';
+    'Approves an NFT allowance. Builder validates serials/allSerials logic and handles serial conversion.';
   specificInputSchema = ApproveTokenNftAllowanceZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -54,40 +53,8 @@ export class HederaApproveTokenNftAllowanceTool extends BaseHederaTransactionToo
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof ApproveTokenNftAllowanceZodSchemaCore>
   ): Promise<void> {
-    if (
-      !specificArgs.allSerials &&
-      (!specificArgs.serials || specificArgs.serials.length === 0)
-    ) {
-      throw new Error(
-        'For NFT allowance, either specify `serials` array or set `allSerials` to true.'
-      );
-    }
-    if (
-      specificArgs.allSerials &&
-      specificArgs.serials &&
-      specificArgs.serials.length > 0
-    ) {
-      throw new Error(
-        'Cannot specify both `serials` and `allSerials: true` for NFT allowance. Choose one.'
-      );
-    }
-
-    const allowanceParams: ApproveTokenNftAllowanceParams = {
-      spenderAccountId: specificArgs.spenderAccountId,
-      tokenId: specificArgs.tokenId,
-    };
-    if (specificArgs.ownerAccountId ) {
-      allowanceParams.ownerAccountId = specificArgs.ownerAccountId;
-    }
-    if (specificArgs.allSerials) {
-      allowanceParams.allSerials = true;
-    } else if (specificArgs.serials) {
-      // AccountBuilder.approveTokenNftAllowance expects serials as Array<number | Long | BigNumber>
-      allowanceParams.serials = specificArgs.serials.map((s) =>
-        typeof s === 'string' ? new BigNumber(s) : s
-      ) as Array<number | Long | BigNumber>;
-    }
-
-    (builder as AccountBuilder).approveTokenNftAllowance(allowanceParams);
+    await (builder as AccountBuilder).approveTokenNftAllowance(
+      specificArgs as unknown as ApproveTokenNftAllowanceParams
+    );
   }
 }

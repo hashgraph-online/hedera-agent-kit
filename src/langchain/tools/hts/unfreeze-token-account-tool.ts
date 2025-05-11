@@ -20,8 +20,7 @@ export class HederaUnfreezeTokenAccountTool extends BaseHederaTransactionTool<
   typeof UnfreezeTokenAccountZodSchemaCore
 > {
   name = 'hedera-hts-unfreeze-token-account';
-  description =
-    'Unfreezes an account for a specific token. Requires tokenId and accountId. Use metaOptions for execution control.';
+  description = 'Unfreezes an account for a specific token.';
   specificInputSchema = UnfreezeTokenAccountZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -36,10 +35,8 @@ export class HederaUnfreezeTokenAccountTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof UnfreezeTokenAccountZodSchemaCore>
   ): Promise<void> {
-    const unfreezeParams: UnfreezeTokenAccountParams = {
-      tokenId: specificArgs.tokenId,
-      accountId: specificArgs.accountId,
-    };
-    (builder as HtsBuilder).unfreezeTokenAccount(unfreezeParams);
+    await (builder as HtsBuilder).unfreezeTokenAccount(
+      specificArgs as unknown as UnfreezeTokenAccountParams
+    );
   }
 }

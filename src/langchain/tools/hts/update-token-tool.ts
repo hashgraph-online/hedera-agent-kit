@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { UpdateTokenParams } from '../../../types';
-import { AccountId, Key } from '@hashgraph/sdk';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
 } from '../common/base-hedera-transaction-tool';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
+import { HtsBuilder } from '../../../builders/hts/hts-builder'; // Added HtsBuilder import
 
 const UpdateTokenZodSchemaCore = z.object({
   tokenId: z
@@ -13,66 +13,81 @@ const UpdateTokenZodSchemaCore = z.object({
     .describe('The ID of the token to update (e.g., "0.0.xxxx").'),
   tokenName: z
     .string()
+    .nullable()
     .optional()
-    .describe('Optional. New name. Use "null" to clear.'),
+    .describe('Optional. New token name. Pass null to clear.'),
   tokenSymbol: z
     .string()
+    .nullable()
     .optional()
-    .describe('Optional. New symbol. Use "null" to clear.'),
+    .describe('Optional. New token symbol. Pass null to clear.'),
   treasuryAccountId: z
     .string()
     .optional()
-    .describe('Optional. New treasury account ID.'),
+    .describe('Optional. New treasury account ID (e.g., "0.0.yyyy").'),
   adminKey: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New admin key (serialized string or "null" to clear).'
+      'Optional. New admin key (serialized string). Pass null to clear.'
     ),
   kycKey: z
     .string()
+    .nullable()
     .optional()
-    .describe('Optional. New KYC key (serialized string or "null" to clear).'),
+    .describe('Optional. New KYC key (serialized string). Pass null to clear.'),
   freezeKey: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New freeze key (serialized string or "null" to clear).'
+      'Optional. New freeze key (serialized string). Pass null to clear.'
     ),
   wipeKey: z
     .string()
-    .optional()
-    .describe('Optional. New wipe key (serialized string or "null" to clear).'),
-  supplyKey: z
-    .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New supply key (serialized string or "null" to clear).'
+      'Optional. New wipe key (serialized string). Pass null to clear.'
+    ),
+  supplyKey: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Optional. New supply key (serialized string). Pass null to clear.'
     ),
   feeScheduleKey: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New fee schedule key (serialized string or "null" to clear).'
+      'Optional. New fee schedule key (serialized string). Pass null to clear.'
     ),
   pauseKey: z
     .string()
+    .nullable()
     .optional()
     .describe(
-      'Optional. New pause key (serialized string or "null" to clear).'
+      'Optional. New pause key (serialized string). Pass null to clear.'
     ),
   autoRenewAccountId: z
     .string()
+    .nullable()
     .optional()
-    .describe('Optional. New auto-renew account ID or "null" to clear.'),
+    .describe('Optional. New auto-renew account ID. Pass null to clear.'),
   autoRenewPeriod: z
     .number()
+    .int()
+    .positive()
     .optional()
     .describe('Optional. New auto-renewal period in seconds.'),
   memo: z
     .string()
+    .nullable()
     .optional()
-    .describe('Optional. New token memo. Use "null" or empty string to clear.'),
+    .describe('Optional. New token memo. Pass null to clear.'),
 });
 
 export class HederaUpdateTokenTool extends BaseHederaTransactionTool<
@@ -80,7 +95,7 @@ export class HederaUpdateTokenTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-hts-update-token';
   description =
-    'Updates an existing Hedera token. Requires tokenId and fields to update. Use metaOptions for execution control.';
+    'Updates an existing Hedera token. Requires tokenId. Other fields are optional. Null can be used to clear certain fields.';
   specificInputSchema = UpdateTokenZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -95,105 +110,8 @@ export class HederaUpdateTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof UpdateTokenZodSchemaCore>
   ): Promise<void> {
-    const updateParams: UpdateTokenParams = { tokenId: specificArgs.tokenId };
-
-    const valOrNull = (val: string | undefined): string | null | undefined => {
-      if (val === undefined) {
-        return undefined;
-      }
-      if (val === 'null' || val === '') {
-        return null;
-      }
-      return val;
-    };
-    const keyOrNull = (
-      val: string | undefined
-    ): string | Key | null | undefined => {
-      if (val === undefined) {
-        return undefined;
-      }
-      if (val === 'null') {
-        return null;
-      }
-      return val;
-    };
-
-    let processedVal;
-
-    if (specificArgs.tokenName ) {
-      processedVal = valOrNull(specificArgs.tokenName);
-      if (processedVal ) {
-        updateParams.tokenName = processedVal;
-      }
-    }
-    if (specificArgs.tokenSymbol ) {
-      processedVal = valOrNull(specificArgs.tokenSymbol);
-      if (processedVal ) {
-        updateParams.tokenSymbol = processedVal;
-      }
-    }
-    if (specificArgs.treasuryAccountId ) {
-      updateParams.treasuryAccountId = specificArgs.treasuryAccountId;
-    }
-    if (specificArgs.adminKey ) {
-      processedVal = keyOrNull(specificArgs.adminKey);
-      if (processedVal ) {
-        updateParams.adminKey = processedVal;
-      }
-    }
-    if (specificArgs.kycKey ) {
-      processedVal = keyOrNull(specificArgs.kycKey);
-      if (processedVal ) {
-        updateParams.kycKey = processedVal;
-      }
-    }
-    if (specificArgs.freezeKey ) {
-      processedVal = keyOrNull(specificArgs.freezeKey);
-      if (processedVal ) {
-        updateParams.freezeKey = processedVal;
-      }
-    }
-    if (specificArgs.wipeKey ) {
-      processedVal = keyOrNull(specificArgs.wipeKey);
-      if (processedVal ) {
-        updateParams.wipeKey = processedVal;
-      }
-    }
-    if (specificArgs.supplyKey ) {
-      processedVal = keyOrNull(specificArgs.supplyKey);
-      if (processedVal ) {
-        updateParams.supplyKey = processedVal;
-      }
-    }
-    if (specificArgs.feeScheduleKey ) {
-      processedVal = keyOrNull(specificArgs.feeScheduleKey);
-      if (processedVal ) {
-        updateParams.feeScheduleKey = processedVal;
-      }
-    }
-    if (specificArgs.pauseKey ) {
-      processedVal = keyOrNull(specificArgs.pauseKey);
-      if (processedVal ) {
-        updateParams.pauseKey = processedVal;
-      }
-    }
-    if (specificArgs.autoRenewAccountId ) {
-      processedVal = valOrNull(specificArgs.autoRenewAccountId);
-      if (processedVal ) {
-        updateParams.autoRenewAccountId = processedVal as
-          | string
-          | AccountId
-          | null;
-      }
-    }
-    if (specificArgs.autoRenewPeriod ) {
-      updateParams.autoRenewPeriod = specificArgs.autoRenewPeriod;
-    }
-    if (specificArgs.memo ) {
-      processedVal = valOrNull(specificArgs.memo);
-      if (processedVal ) {
-        updateParams.memo = processedVal;
-      }
-    }
+    await (builder as HtsBuilder).updateToken(
+      specificArgs as unknown as UpdateTokenParams
+    );
   }
 }

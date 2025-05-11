@@ -20,8 +20,7 @@ export class HederaRevokeKycTokenTool extends BaseHederaTransactionTool<
   typeof RevokeKycTokenZodSchemaCore
 > {
   name = 'hedera-hts-revoke-kyc-token';
-  description =
-    'Revokes KYC from an account for a specific token. Requires tokenId and accountId. Use metaOptions for execution control.';
+  description = 'Revokes KYC from an account for a specific token.';
   specificInputSchema = RevokeKycTokenZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -36,10 +35,8 @@ export class HederaRevokeKycTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof RevokeKycTokenZodSchemaCore>
   ): Promise<void> {
-    const revokeParams: RevokeKycTokenParams = {
-      tokenId: specificArgs.tokenId,
-      accountId: specificArgs.accountId,
-    };
-    (builder as HtsBuilder).revokeKycToken(revokeParams);
+    await (builder as HtsBuilder).revokeKycToken(
+      specificArgs as RevokeKycTokenParams
+    );
   }
 }

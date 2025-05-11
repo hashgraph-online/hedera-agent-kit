@@ -4,11 +4,8 @@ import {
   FileAppendTransaction,
   FileUpdateTransaction,
   FileDeleteTransaction,
-  KeyList,
   PrivateKey,
   PublicKey,
-  Key,
-  FileId,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../../signer/abstract-signer';

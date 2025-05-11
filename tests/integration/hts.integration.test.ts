@@ -14,9 +14,31 @@ import {
   HederaUpdateTokenTool,
   HederaAssociateTokensTool,
   HederaDissociateTokensTool,
+  HederaWipeTokenAccountTool,
+  HederaTokenFeeScheduleUpdateTool,
+  HederaRejectTokensTool,
+  HederaFreezeTokenAccountTool,
+  HederaUnfreezeTokenAccountTool,
+  HederaGrantKycTokenTool,
+  HederaRevokeKycTokenTool,
+  HederaTransferTokensTool,
+  HederaAirdropTokenTool,
 } from '../../src/langchain/tools/hts';
 // import { initializeTestKit, generateUniqueName, createTestAgentExecutor, delay } from './utils'; // Temporarily commented out
-import { TokenId, AccountId } from '@hashgraph/sdk';
+import {
+  TokenId,
+  AccountId,
+  PrivateKey as SDKPrivateKey,
+  PublicKey as SDKPublicKey,
+  AccountCreateTransaction,
+  Hbar as SDKHbar,
+  Transaction,
+  TokenAssociateTransaction,
+  TokenDissociateTransaction,
+  Status,
+  TokenFreezeTransaction,
+  TokenUnfreezeTransaction,
+} from '@hashgraph/sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 import { StructuredTool } from '@langchain/core/tools';
@@ -101,6 +123,45 @@ async function createTestAgentExecutor(
     returnIntermediateSteps: true, // Ensure intermediate steps are returned
   });
 }
+
+async function createNewTestAccount(
+  kit: HederaAgentKit,
+  initialBalanceHbar: number
+): Promise<{
+  accountId: AccountId;
+  privateKey: SDKPrivateKey;
+  publicKey: SDKPublicKey;
+}> {
+  const newPrivateKey = SDKPrivateKey.generateED25519();
+  const newPublicKey = newPrivateKey.publicKey;
+  console.log(
+    `[createNewTestAccount] Generated new PublicKey: ${newPublicKey.toStringDer()}`
+  );
+  const transaction = new AccountCreateTransaction()
+    .setKey(newPublicKey)
+    .setInitialBalance(new SDKHbar(initialBalanceHbar));
+  console.log(
+    `[createNewTestAccount] Attempting to create account with key ${newPublicKey.toStringDer()} and balance ${initialBalanceHbar} HBAR...`
+  );
+  const frozenTx = await transaction.freezeWith(kit.client);
+  const signedTx = await frozenTx.sign(kit.signer.getOperatorPrivateKey());
+  const txResponse = await signedTx.execute(kit.client);
+  const receipt = await txResponse.getReceipt(kit.client);
+  if (!receipt.accountId) {
+    throw new Error(
+      'Failed to create new account: accountId is null in receipt.'
+    );
+  }
+  console.log(
+    `[createNewTestAccount] Successfully created account ${receipt.accountId.toString()}`
+  );
+  return {
+    accountId: receipt.accountId,
+    privateKey: newPrivateKey,
+    publicKey: newPublicKey,
+  };
+}
+
 // --- END INLINED UTILS ---
 
 // Helper to extract tool output from AgentExecutor result
@@ -189,6 +250,10 @@ describe('Hedera HTS Tools Integration Tests', () => {
   let createdTokenIds: TokenId[] = [];
   let treasuryAccountId: AccountId;
   let openAIApiKey: string;
+  let operatorAccountId: AccountId;
+  let sharedSecondaryAccountId: AccountId; // For reusable secondary account
+  let sharedSecondaryAccountPrivateKey: SDKPrivateKey; // Its private key
+  let secondaryAccountSigner: ServerSigner; // << NEW: Signer for the shared secondary account
 
   beforeAll(async () => {
     kit = await initializeTestKit();
@@ -196,6 +261,27 @@ describe('Hedera HTS Tools Integration Tests', () => {
     openAIApiKey = process.env.OPENAI_API_KEY as string;
     if (!openAIApiKey) {
       throw new Error('OPENAI_API_KEY is not set in environment variables.');
+    }
+    // Create one shared secondary account for all tests in this file that need it
+    try {
+      const accountDetails = await createNewTestAccount(kit, 50); // Create with 50 HBAR
+      sharedSecondaryAccountId = accountDetails.accountId;
+      sharedSecondaryAccountPrivateKey = accountDetails.privateKey;
+      // Create a ServerSigner for this new account
+      secondaryAccountSigner = new ServerSigner(
+        sharedSecondaryAccountId,
+        sharedSecondaryAccountPrivateKey,
+        kit.network
+      ); // Using kit.network for consistency
+      console.log(
+        `Created shared secondary account ${sharedSecondaryAccountId.toString()} and its signer for HTS test suites.`
+      );
+    } catch (e) {
+      console.error(
+        'CRITICAL: Failed to create shared secondary account in main beforeAll',
+        e
+      );
+      throw e; // Fail all tests if this crucial setup fails
     }
   });
 
@@ -217,9 +303,20 @@ describe('Hedera HTS Tools Integration Tests', () => {
           const agentResult = await agentExecutor.invoke({ input: prompt });
           const result = getToolOutputFromResult(agentResult);
 
+          if (!result.success) {
+            // Explicitly log if not successful BEFORE expect
+            console.error(
+              `Cleanup FAILED (result.success is false) for ${tokenId.toString()}: Detailed error: ${JSON.stringify(
+                result.error || result
+              )}`
+            );
+          }
+
           expect(
             result.success,
-            `Cleanup Failed for ${tokenId.toString()}: ${result.error}`
+            `Cleanup Failed for ${tokenId.toString()}: ${JSON.stringify(
+              result.error || result
+            )}` // stringify error
           ).toBe(true);
           expect(result.receipt).toBeDefined();
           if (result.receipt) {
@@ -743,89 +840,923 @@ describe('Hedera HTS Tools Integration Tests', () => {
 
   describe('HederaAssociateTokensTool', () => {
     let associatableTokenId: TokenId;
-    // Placeholder for a secondary account ID. In a real scenario, this account would need to exist.
-    const secondaryAccountIdString = '0.0.12345'; // Replace with a real secondary testnet account if available for manual testing
 
     beforeAll(async () => {
-      // Create a token to be associated
-      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
+      // Token created by operator, secondary account will associate itself in the test.
+      const createTokenTool = new HederaCreateFungibleTokenTool({
+        hederaKit: kit,
+      });
       const agentExecutor = await createTestAgentExecutor(
-        createTool,
+        createTokenTool,
         openAIApiKey
       );
       const tokenName = generateUniqueName('AssociatableFT');
       const tokenSymbol = generateUniqueName('AFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+      const supplyAmount = 100;
+      const createTokenPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: ${supplyAmount}, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: ${supplyAmount}, Admin Key: "${operatorPublicKeyDer}".`;
 
-      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 100, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}. For the adminKey, use "current_signer". metaOptions: { adminKeyShouldSign: true }`;
-
-      const agentResult = await agentExecutor.invoke({ input: createPrompt });
-      const result = getToolOutputFromResult(agentResult);
+      const agentResultTokenCreate = await agentExecutor.invoke({
+        input: createTokenPrompt,
+      });
+      const resultTokenCreate = getToolOutputFromResult(agentResultTokenCreate);
       expect(
-        result.success,
-        `Setup for AssociateToken failed (token creation): ${result.error}`
+        resultTokenCreate.success,
+        `Setup for AssociateToken failed (token creation): ${
+          resultTokenCreate.error
+        } - Input: ${JSON.stringify(
+          agentResultTokenCreate.intermediateSteps?.[0]?.action.toolInput
+        )}`
       ).toBe(true);
-      expect(
-        result.receipt?.tokenId,
-        'Associatable FT setup failed to return tokenId'
-      ).toBeDefined();
-      associatableTokenId = result.receipt.tokenId!;
+      associatableTokenId = resultTokenCreate.receipt!.tokenId!;
       createdTokenIds.push(associatableTokenId);
       console.log(
         `Created AssociatableFT ${associatableTokenId.toString()} for association tests.`
       );
     });
 
-    it('should associate a token with a (placeholder) secondary account', async () => {
+    it('should prepare transaction bytes for association, then allow secondary account to sign and execute', async () => {
       const tool = new HederaAssociateTokensTool({ hederaKit: kit });
       const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
 
-      // Note: For this test to truly pass against a live network, the secondaryAccountIdString would need to exist,
-      // and its key would need to sign the association if the token has no KYC key, or if it does and KYC is not granted.
-      // If the token has a KYC key, KYC must be granted to secondaryAccountIdString first.
-      // If the token has freeze_default = true, the account might be frozen upon association.
-      // We are testing the tool's ability to construct and submit the transaction signed by the operator.
-      const prompt = `Associate token ${associatableTokenId.toString()} with account ${secondaryAccountIdString}. The account ${secondaryAccountIdString} should sign for this association. metaOptions: { /* We need a way for the test to provide secondary signer or assume operator can do this if authorized by token settings */ }`;
-      // For this test, we assume the operator is trying to associate for an account that will sign with its own key later,
-      // or the token is configured to not require such (e.g. no KYC key).
-      // The tool itself is signed by the operator. The actual association also needs the accountId's signature(s).
-      // The current tool doesn't support providing additional signers beyond the operator.
-      // So this test will likely show TRANSACTION_REQUIRES_ZERO_NODE_ACCOUNT if not properly signed by target account or fails due to KYC/Freeze.
-      // We will simplify the prompt to just what the operator can do.
+      const prompt = `Prepare a transaction for account ${sharedSecondaryAccountId.toString()} to associate with token ${associatableTokenId.toString()}. Return the transaction bytes. metaOptions: { getBytes: true }`;
 
-      const simplifiedPrompt = `Associate token ${associatableTokenId.toString()} with account ${secondaryAccountIdString}. Assume account ${treasuryAccountId.toString()} (operator) is submitting this for ${secondaryAccountIdString} and ${secondaryAccountIdString} will sign separately or has pre-approved.`;
-      // Even simpler: The tool only allows the operator to sign. So the operator cannot associate for another account unless that account has signed a transaction granting permission,
-      // OR the token has no KYC key and is not frozen by default for the target account.
-      // For now, let's test the tool submitting the transaction. The transaction will likely fail with INVALID_SIGNATURE or ACCOUNT_KYC_NOT_GRANTED_FOR_TOKEN etc.
-      // unless secondaryAccountIdString is the operator itself (which is not a valid association test).
-      // The current tool cannot make this succeed for a distinct secondary account without more features (multi-sig).
-
-      // Let's assume for the sake of testing the tool call structure that the account ID is the operator's own ID
-      // (though this is not a useful real-world association, it tests the tool path)
-      // OR, we just expect a specific failure if secondaryAccountIdString is different.
-
-      // Test path: Operator (treasury) tries to associate the token with ITSELF (which is not how it works, it's already treasury)
-      // This will likely fail with an SDK error or specific Hedera error code, which we can assert.
-      // A better test would be a secondary account ID for which the operator *can* associate (e.g. if token has no KYC).
-
-      // Given the limitations, let's test the call with the placeholder and expect a failure that indicates the account needs to sign or KYC, etc.
-      // This tests the tool structure, not necessarily a successful association for a distinct account.
-      const testPrompt = `Associate token ${associatableTokenId.toString()} with account ${secondaryAccountIdString}.`;
-
-      const agentResult = await agentExecutor.invoke({ input: testPrompt });
+      const agentResult = await agentExecutor.invoke({ input: prompt });
       const result = getToolOutputFromResult(agentResult);
 
-      // We expect this to fail because secondaryAccountIdString (0.0.12345) needs to sign,
-      // or KYC/Freeze might prevent it. The tool only signs with the operator.
-      expect(result.success).toBe(false);
-      expect(result.error).toBeDefined();
-      // Example expected errors: TRANSACTION_REQUIRES_ZERO_NODE_ACCOUNT, INVALID_SIGNATURE (if account doesn't exist or can't sign),
-      // ACCOUNT_KYC_NOT_GRANTED_FOR_TOKEN, TOKEN_NOT_ASSOCIATED_TO_ACCOUNT (for dissociate), TOKEN_WAS_DENIED_KYC
-      // For now, just check that it didn't succeed and an error was reported.
+      expect(
+        result.success,
+        `Tool failed to get transaction bytes for association: ${result.error}`
+      ).toBe(true);
+      expect(result.type).toEqual('bytes');
+      expect(result.output).toBeDefined();
+      const transactionBytesBase64 = result.output as string;
       console.log(
-        `Association attempt for ${secondaryAccountIdString} with ${associatableTokenId.toString()} correctly failed as expected (no secondary signature): ${
+        'HederaAssociateTokensTool returned transaction bytes for association.'
+      );
+
+      // sharedSecondaryAccount loads, signs, and executes the association using its own signer
+      const transactionBytes = Buffer.from(transactionBytesBase64, 'base64');
+      // IMPORTANT: Freeze the transaction with the intended signer's client *before* signing with its key.
+      const associateTx = (
+        Transaction.fromBytes(transactionBytes) as TokenAssociateTransaction
+      ).freezeWith(secondaryAccountSigner.getClient()); // Freeze with secondary signer's client
+
+      const signedBySecondaryAccountTx = await associateTx.sign(
+        sharedSecondaryAccountPrivateKey
+      );
+
+      console.log(
+        `Executing association TX via secondaryAccountSigner for account ${sharedSecondaryAccountId} and token ${associatableTokenId}`
+      );
+      const execResult = await secondaryAccountSigner.signAndExecuteTransaction(
+        signedBySecondaryAccountTx
+      ); // Pass the already signed tx
+
+      expect(execResult.status.toString()).toEqual(Status.Success.toString());
+      console.log(
+        `Token ${associatableTokenId.toString()} successfully associated with ${sharedSecondaryAccountId.toString()} via its own signer.`
+      );
+    });
+  });
+
+  describe('HederaDissociateTokensTool', () => {
+    let dissociatableTokenIdForThisSuite: TokenId;
+
+    beforeAll(async () => {
+      // 1. Create a token
+      const createTokenTool = new HederaCreateFungibleTokenTool({
+        hederaKit: kit,
+      });
+      const agentExecutorToken = await createTestAgentExecutor(
+        createTokenTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('DissociateTargetFT');
+      const tokenSymbol = generateUniqueName('DTFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+      const createTokenPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 100, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: 100, Admin Key: "${operatorPublicKeyDer}".`;
+
+      const agentResultTokenCreate = await agentExecutorToken.invoke({
+        input: createTokenPrompt,
+      });
+      const resultTokenCreate = getToolOutputFromResult(agentResultTokenCreate);
+      expect(
+        resultTokenCreate.success,
+        `Setup for DissociateToken failed (token creation): ${resultTokenCreate.error}`
+      ).toBe(true);
+      dissociatableTokenIdForThisSuite = resultTokenCreate.receipt!.tokenId!;
+      createdTokenIds.push(dissociatableTokenIdForThisSuite);
+      console.log(
+        `Created DissociateTargetFT ${dissociatableTokenIdForThisSuite.toString()} for dissociate tests.`
+      );
+
+      // 2. Associate this token with the SHARED secondary account using its own signer
+      console.log(
+        `Associating token ${dissociatableTokenIdForThisSuite} with SHARED account ${sharedSecondaryAccountId} for dissociation test setup (using secondaryAccountSigner).`
+      );
+      const associateTx = new TokenAssociateTransaction()
+        .setAccountId(sharedSecondaryAccountId)
+        .setTokenIds([dissociatableTokenIdForThisSuite]);
+
+      const associateReceipt =
+        await secondaryAccountSigner.signAndExecuteTransaction(associateTx);
+
+      expect(associateReceipt.status.toString()).toEqual(
+        Status.Success.toString()
+      );
+      console.log(
+        `Token ${dissociatableTokenIdForThisSuite.toString()} successfully associated with ${sharedSecondaryAccountId.toString()} in setup (via secondaryAccountSigner).`
+      );
+    });
+
+    it('should prepare transaction bytes for dissociation, then allow secondary account to sign and execute', async () => {
+      const tool = new HederaDissociateTokensTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+
+      const prompt = `Prepare a transaction for account ${sharedSecondaryAccountId.toString()} to dissociate from token ${dissociatableTokenIdForThisSuite.toString()}. Return the transaction bytes. metaOptions: { getBytes: true }`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(
+        result.success,
+        `Tool failed to get transaction bytes for dissociation: ${result.error}`
+      ).toBe(true);
+      expect(result.type).toEqual('bytes');
+      expect(result.output).toBeDefined();
+      const transactionBytesBase64 = result.output as string;
+      console.log(
+        'HederaDissociateTokensTool returned transaction bytes for dissociation.'
+      );
+
+      // sharedSecondaryAccount loads, signs, and executes the dissociation using its own signer
+      const transactionBytes = Buffer.from(transactionBytesBase64, 'base64');
+      const dissociateTx = (
+        TokenDissociateTransaction.fromBytes(
+          transactionBytes
+        ) as TokenDissociateTransaction
+      ).freezeWith(secondaryAccountSigner.getClient()); // Freeze with secondary signer's client
+
+      const signedBySecondaryAccountTx = await dissociateTx.sign(
+        sharedSecondaryAccountPrivateKey
+      );
+
+      console.log(
+        `Executing dissociation TX via secondaryAccountSigner for account ${sharedSecondaryAccountId} and token ${dissociatableTokenIdForThisSuite}`
+      );
+      const execResult = await secondaryAccountSigner.signAndExecuteTransaction(
+        signedBySecondaryAccountTx
+      );
+
+      expect(execResult.status.toString()).toEqual(Status.Success.toString());
+      console.log(
+        `Token ${dissociatableTokenIdForThisSuite.toString()} successfully dissociated from account ${sharedSecondaryAccountId.toString()} via its own signer.`
+      );
+    });
+  });
+
+  describe('HederaWipeTokenAccountTool', () => {
+    let wipeableFtId: TokenId;
+    const initialSupplyForWipe = 3000;
+    const amountToWipe = 700;
+
+    beforeAll(async () => {
+      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(
+        createTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('WipeableFT');
+      const tokenSymbol = generateUniqueName('WFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+
+      // Token needs admin, supply, and wipe keys
+      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: ${initialSupplyForWipe}, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: ${
+        initialSupplyForWipe + 10000
+      }, Admin Key: "${operatorPublicKeyDer}", Supply Key: "${operatorPublicKeyDer}", Wipe Key: "${operatorPublicKeyDer}".`;
+
+      const agentResult = await agentExecutor.invoke({ input: createPrompt });
+      const result = getToolOutputFromResult(agentResult);
+      expect(
+        result.success,
+        `Setup for WipeToken failed (token creation): ${
+          result.error
+        } - Input: ${JSON.stringify(
+          agentResult.intermediateSteps?.[0]?.action.toolInput
+        )}`
+      ).toBe(true);
+      expect(
+        result.receipt?.tokenId,
+        'Wipeable FT setup failed to return tokenId'
+      ).toBeDefined();
+      wipeableFtId = result.receipt.tokenId!;
+      createdTokenIds.push(wipeableFtId);
+      console.log(
+        `Created WipeableFT ${wipeableFtId.toString()} with initial supply ${initialSupplyForWipe} for wipe tests.`
+      );
+    });
+
+    it('should fail to wipe fungible tokens from the treasury account', async () => {
+      const tool = new HederaWipeTokenAccountTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+
+      const prompt = `Wipe ${amountToWipe} units of token ${wipeableFtId.toString()} from account ${treasuryAccountId.toString()}. metaOptions: { wipeKeyShouldSign: true }`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(
+        result.success,
+        `WipeToken did not fail as expected when wiping treasury: ${JSON.stringify(
+          result
+        )}`
+      ).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('CANNOT_WIPE_TOKEN_TREASURY_ACCOUNT');
+      console.log(
+        `Wipe attempt from treasury for token ${wipeableFtId.toString()} correctly failed with: ${
           result.error
         }`
       );
+    });
+  });
+
+  describe('HederaTokenFeeScheduleUpdateTool', () => {
+    let tokenWithFeeScheduleKeyId: TokenId;
+
+    beforeAll(async () => {
+      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(
+        createTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('FeeSchedFT');
+      const tokenSymbol = generateUniqueName('FSFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+
+      // Token needs adminKey and feeScheduleKey
+      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 1000, Decimals: 2, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: 10000. For the adminKey, use "${operatorPublicKeyDer}". For the feeScheduleKey, also use "${operatorPublicKeyDer}".`;
+
+      const agentResult = await agentExecutor.invoke({ input: createPrompt });
+      const result = getToolOutputFromResult(agentResult);
+      expect(
+        result.success,
+        `Setup for FeeScheduleUpdate failed (token creation): ${
+          result.error
+        } - Input: ${JSON.stringify(
+          agentResult.intermediateSteps?.[0]?.action.toolInput
+        )}`
+      ).toBe(true);
+      expect(
+        result.receipt?.tokenId,
+        'FeeSchedFT setup failed to return tokenId'
+      ).toBeDefined();
+      tokenWithFeeScheduleKeyId = result.receipt.tokenId!;
+      createdTokenIds.push(tokenWithFeeScheduleKeyId);
+      console.log(
+        `Created FeeSchedFT ${tokenWithFeeScheduleKeyId.toString()} for fee schedule update tests.`
+      );
+    });
+
+    it('should update the token fee schedule', async () => {
+      const tool = new HederaTokenFeeScheduleUpdateTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+
+      const customFeesJson = JSON.stringify([
+        {
+          type: 'FIXED',
+          feeCollectorAccountId: treasuryAccountId.toString(),
+          denominatingTokenId: tokenWithFeeScheduleKeyId.toString(),
+          amount: '5',
+        },
+        {
+          type: 'FRACTIONAL',
+          feeCollectorAccountId: treasuryAccountId.toString(),
+          numerator: 1,
+          denominator: 100,
+          minAmount: '1',
+          maxAmount: '10',
+          assessmentMethodInclusive: false,
+        },
+      ]);
+
+      // The feeScheduleKey (operator) must sign this transaction.
+      const prompt = `Update the fee schedule for token ${tokenWithFeeScheduleKeyId.toString()} with the following custom fees: ${customFeesJson}. metaOptions: { feeScheduleKeyShouldSign: true }`;
+      // Note: feeScheduleKeyShouldSign is not yet implemented in BaseHederaTransactionTool, but operator signs by default.
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(
+        result.success,
+        `TokenFeeScheduleUpdate Test Failed: ${result.error}`
+      ).toBe(true);
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `Token fee schedule for ${tokenWithFeeScheduleKeyId.toString()} updated successfully.`
+      );
+      // TODO: Query token info to verify new fee schedule (more complex).
+    });
+  });
+
+  describe('HederaRejectTokensTool', () => {
+    let rejectableTokenId: TokenId;
+
+    beforeAll(async () => {
+      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(
+        createTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('RejectableFT');
+      const tokenSymbol = generateUniqueName('RFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+
+      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 100, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: 100, Admin Key: "${operatorPublicKeyDer}".`;
+
+      const agentResult = await agentExecutor.invoke({ input: createPrompt });
+      const result = getToolOutputFromResult(agentResult);
+      expect(
+        result.success,
+        `Setup for RejectToken failed (token creation): ${
+          result.error
+        } - Input: ${JSON.stringify(
+          agentResult.intermediateSteps?.[0]?.action.toolInput
+        )}`
+      ).toBe(true);
+      expect(
+        result.receipt?.tokenId,
+        'Rejectable FT setup failed to return tokenId'
+      ).toBeDefined();
+      rejectableTokenId = result.receipt.tokenId!;
+      createdTokenIds.push(rejectableTokenId);
+      console.log(
+        `Created RejectableFT ${rejectableTokenId.toString()} for reject tests.`
+      );
+    });
+
+    it('should configure the operator to reject associations for the specified token', async () => {
+      const tool = new HederaRejectTokensTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+
+      // The TokenRejectTransaction is signed by the owner of the rejection (the operator in this case).
+      const prompt = `Configure my account (${treasuryAccountId.toString()}) to reject token ${rejectableTokenId.toString()}.`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      // Expect this to fail with ACCOUNT_IS_TREASURY because the operator is the treasury of rejectableTokenId
+      expect(
+        result.success,
+        `RejectToken did not fail as expected: ${JSON.stringify(result)}`
+      ).toBe(false);
+      expect(result.error).toBeDefined();
+      expect(result.error).toContain('ACCOUNT_IS_TREASURY');
+      console.log(
+        `Operator account ${treasuryAccountId.toString()} correctly failed to reject token ${rejectableTokenId.toString()} (as it's treasury): ${
+          result.error
+        }`
+      );
+    });
+  });
+
+  describe('HederaFreezeUnfreezeTokenAccountTool', () => {
+    let tokenIdToFreeze: TokenId;
+    // Using the sharedSecondaryAccountId and sharedSecondaryAccountPrivateKey
+
+    beforeAll(async () => {
+      // 1. Create a token with a freeze key (operator)
+      const createTokenTool = new HederaCreateFungibleTokenTool({
+        hederaKit: kit,
+      });
+      const agentExecutorToken = await createTestAgentExecutor(
+        createTokenTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('FreezableFT');
+      const tokenSymbol = generateUniqueName('FFT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+      const createTokenPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 1000, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: 1000, Admin Key: "${operatorPublicKeyDer}", Freeze Key: "${operatorPublicKeyDer}".`;
+
+      const agentResultTokenCreate = await agentExecutorToken.invoke({
+        input: createTokenPrompt,
+      });
+      const resultTokenCreate = getToolOutputFromResult(agentResultTokenCreate);
+      expect(
+        resultTokenCreate.success,
+        `Setup for Freeze/Unfreeze failed (token creation): ${resultTokenCreate.error}`
+      ).toBe(true);
+      tokenIdToFreeze = resultTokenCreate.receipt!.tokenId!;
+      createdTokenIds.push(tokenIdToFreeze);
+      console.log(
+        `Created FreezableFT ${tokenIdToFreeze.toString()} for freeze/unfreeze tests.`
+      );
+
+      // 2. Associate this token with the SHARED secondary account using its own signer
+      console.log(
+        `Associating token ${tokenIdToFreeze} with SHARED account ${sharedSecondaryAccountId} for freeze/unfreeze test setup (via secondaryAccountSigner).`
+      );
+      const associateTxFrozen = new TokenAssociateTransaction()
+        .setAccountId(sharedSecondaryAccountId)
+        .setTokenIds([tokenIdToFreeze]);
+
+      const associateReceipt =
+        await secondaryAccountSigner.signAndExecuteTransaction(
+          associateTxFrozen
+        );
+      expect(associateReceipt.status.toString()).toEqual(
+        Status.Success.toString()
+      );
+      console.log(
+        `Token ${tokenIdToFreeze.toString()} successfully associated with ${sharedSecondaryAccountId.toString()} in setup for freeze/unfreeze (via secondaryAccountSigner).`
+      );
+    });
+
+    it('should freeze and then unfreeze a token for the shared secondary account using transaction bytes', async () => {
+      // --- Freeze ---
+      const freezeTool = new HederaFreezeTokenAccountTool({ hederaKit: kit });
+      let agentExecutor = await createTestAgentExecutor(
+        freezeTool,
+        openAIApiKey
+      );
+      let prompt = `Prepare a transaction to freeze token ${tokenIdToFreeze.toString()} for account ${sharedSecondaryAccountId.toString()}. Return the transaction bytes. metaOptions: { getBytes: true }`;
+
+      let agentResult = await agentExecutor.invoke({ input: prompt });
+      let result = getToolOutputFromResult(agentResult);
+      expect(
+        result.success,
+        `FreezeTool failed to get transaction bytes: ${result.error}`
+      ).toBe(true);
+      expect(result.type).toEqual('bytes');
+      const freezeTxBytes = Buffer.from(result.output as string, 'base64');
+      const freezeTx = Transaction.fromBytes(
+        freezeTxBytes
+      ) as TokenFreezeTransaction;
+
+      const signedFreezeTx = await freezeTx.sign(
+        kit.signer.getOperatorPrivateKey()
+      ); // Operator (freeze key holder) signs
+      console.log(
+        `Executing signed freeze TX for account ${sharedSecondaryAccountId} and token ${tokenIdToFreeze}`
+      );
+      let submit = await signedFreezeTx.execute(kit.client);
+      let receipt = await submit.getReceipt(kit.client);
+      expect(receipt.status).toEqual(Status.Success);
+      console.log(
+        `Token ${tokenIdToFreeze.toString()} successfully frozen for account ${sharedSecondaryAccountId.toString()}.`
+      );
+
+      // --- Unfreeze ---
+      const unfreezeTool = new HederaUnfreezeTokenAccountTool({
+        hederaKit: kit,
+      });
+      agentExecutor = await createTestAgentExecutor(unfreezeTool, openAIApiKey);
+      prompt = `Prepare a transaction to unfreeze token ${tokenIdToFreeze.toString()} for account ${sharedSecondaryAccountId.toString()}. Return the transaction bytes. metaOptions: { getBytes: true }`;
+
+      agentResult = await agentExecutor.invoke({ input: prompt });
+      result = getToolOutputFromResult(agentResult);
+      expect(
+        result.success,
+        `UnfreezeTool failed to get transaction bytes: ${result.error}`
+      ).toBe(true);
+      expect(result.type).toEqual('bytes');
+      const unfreezeTxBytes = Buffer.from(result.output as string, 'base64');
+      const unfreezeTx = Transaction.fromBytes(
+        unfreezeTxBytes
+      ) as TokenUnfreezeTransaction;
+
+      const signedUnfreezeTx = await unfreezeTx.sign(
+        kit.signer.getOperatorPrivateKey()
+      ); // Operator (freeze key holder) signs
+      console.log(
+        `Executing signed unfreeze TX for account ${sharedSecondaryAccountId} and token ${tokenIdToFreeze}`
+      );
+      submit = await signedUnfreezeTx.execute(kit.client);
+      receipt = await submit.getReceipt(kit.client);
+      expect(receipt.status).toEqual(Status.Success);
+      console.log(
+        `Token ${tokenIdToFreeze.toString()} successfully unfrozen for account ${sharedSecondaryAccountId.toString()}.`
+      );
+    });
+  });
+
+  describe('HederaGrantKycTokenTool and HederaRevokeKycTokenTool', () => {
+    let kycEnabledTokenId: TokenId;
+
+    beforeAll(async () => {
+      // 1. Create a token with KYC key (operator as KYC key)
+      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
+      const agentExecutorCreate = await createTestAgentExecutor(
+        createTool,
+        openAIApiKey
+      );
+      const tokenName = generateUniqueName('KycFT');
+      const tokenSymbol = generateUniqueName('KYT');
+      const operatorPublicKeyDer = (
+        await kit.signer.getPublicKey()
+      ).toStringDer();
+
+      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 1000, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}. For the kycKey, use "${operatorPublicKeyDer}". For the adminKey, use "${operatorPublicKeyDer}".`;
+
+      const agentResultCreate = await agentExecutorCreate.invoke({
+        input: createPrompt,
+      });
+      const resultCreate = getToolOutputFromResult(agentResultCreate);
+      expect(
+        resultCreate.success,
+        `Setup for KYC Tests (Token Creation) failed: ${resultCreate.error}`
+      ).toBe(true);
+      expect(
+        resultCreate.receipt?.tokenId,
+        'KYC-enabled token creation failed to return tokenId'
+      ).toBeDefined();
+      kycEnabledTokenId = resultCreate.receipt!.tokenId!;
+      createdTokenIds.push(kycEnabledTokenId);
+      console.log(
+        `Created KYC-enabled token ${kycEnabledTokenId.toString()} for KYC tests.`
+      );
+
+      // 2. Associate this token with the sharedSecondaryAccountId using its own signer
+      console.log(
+        `Associating KYC-enabled token ${kycEnabledTokenId.toString()} with shared account ${sharedSecondaryAccountId.toString()} for KYC tests (via secondaryAccountSigner).`
+      );
+      const associateTx = new TokenAssociateTransaction()
+        .setAccountId(sharedSecondaryAccountId)
+        .setTokenIds([kycEnabledTokenId]);
+
+      const associateReceipt =
+        await secondaryAccountSigner.signAndExecuteTransaction(associateTx);
+      expect(associateReceipt.status.toString()).toEqual(
+        Status.Success.toString()
+      ); // Compare stringified status
+      console.log(
+        `Token ${kycEnabledTokenId.toString()} successfully associated with ${sharedSecondaryAccountId.toString()} for KYC tests (via secondaryAccountSigner).`
+      );
+    });
+
+    it('should grant KYC to the shared secondary account for the token', async () => {
+      const tool = new HederaGrantKycTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+      const prompt = `Grant KYC to account ${sharedSecondaryAccountId.toString()} for token ${kycEnabledTokenId.toString()}. metaOptions: { kycKeyShouldSign: true }`; // Assuming kycKeyShouldSign metaOption might be needed, though operator (KYC key holder) signs by default.
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(result.success, `GrantKYC Test Failed: ${result.error}`).toBe(
+        true
+      );
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `KYC granted to ${sharedSecondaryAccountId.toString()} for token ${kycEnabledTokenId.toString()} successfully.`
+      );
+    });
+
+    it('should revoke KYC from the shared secondary account for the token', async () => {
+      // This test depends on the grant KYC test passing first.
+      const tool = new HederaRevokeKycTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+      const prompt = `Revoke KYC from account ${sharedSecondaryAccountId.toString()} for token ${kycEnabledTokenId.toString()}. metaOptions: { kycKeyShouldSign: true }`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(result.success, `RevokeKYC Test Failed: ${result.error}`).toBe(
+        true
+      );
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `KYC revoked from ${sharedSecondaryAccountId.toString()} for token ${kycEnabledTokenId.toString()} successfully.`
+      );
+    });
+  });
+
+  describe('HederaTransferTokensTool', () => {
+    let transferSourceFtId: TokenId;
+    let transferSourceNftCollectionId: TokenId;
+    let nftSerialToTransfer: number;
+
+    beforeAll(async () => {
+      // Setup for Fungible Token Transfer
+      const createFtTool = new HederaCreateFungibleTokenTool({
+        hederaKit: kit,
+      });
+      const agentExecutorFtCreate = await createTestAgentExecutor(
+        createFtTool,
+        openAIApiKey
+      );
+      const ftName = generateUniqueName('TransferFT');
+      const ftSymbol = generateUniqueName('TFTT');
+      const createFtPrompt = `Create a new fungible token. Name: "${ftName}", Symbol: "${ftSymbol}", Initial Supply: 5000, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}. For the adminKey, use "current_signer". metaOptions: { adminKeyShouldSign: true }`;
+
+      const agentResultFtCreate = await agentExecutorFtCreate.invoke({
+        input: createFtPrompt,
+      });
+      const resultFtCreate = getToolOutputFromResult(agentResultFtCreate);
+      expect(
+        resultFtCreate.success,
+        `Setup for TransferTokens (FT Creation) failed: ${resultFtCreate.error}`
+      ).toBe(true);
+      expect(
+        resultFtCreate.receipt?.tokenId,
+        'Transfer FT creation failed to return tokenId'
+      ).toBeDefined();
+      transferSourceFtId = resultFtCreate.receipt!.tokenId!;
+      createdTokenIds.push(transferSourceFtId);
+      console.log(
+        `Created TransferFT ${transferSourceFtId.toString()} for transfer tests.`
+      );
+
+      // Associate FT with sharedSecondaryAccountId using its own signer
+      console.log(
+        `Associating TransferFT ${transferSourceFtId.toString()} with ${sharedSecondaryAccountId.toString()} (via secondaryAccountSigner).`
+      );
+      const associateFtTx = new TokenAssociateTransaction()
+        .setAccountId(sharedSecondaryAccountId)
+        .setTokenIds([transferSourceFtId]);
+      const associateFtReceipt =
+        await secondaryAccountSigner.signAndExecuteTransaction(associateFtTx);
+      expect(associateFtReceipt.status.toString()).toEqual(
+        Status.Success.toString()
+      );
+      console.log(
+        `Associated TransferFT ${transferSourceFtId.toString()} with ${sharedSecondaryAccountId.toString()} successfully (via secondaryAccountSigner).`
+      );
+
+      // Setup for NFT Transfer
+      const createNftTool = new HederaCreateNftTool({ hederaKit: kit });
+      const agentExecutorNftCreate = await createTestAgentExecutor(
+        createNftTool,
+        openAIApiKey
+      );
+      const nftName = generateUniqueName('TransferNFTColl');
+      const nftSymbol = generateUniqueName('TNFTTC');
+      const createNftPrompt = `Create a new NFT collection. Name: "${nftName}", Symbol: "${nftSymbol}", Treasury Account: ${treasuryAccountId.toString()}, Supply Type: FINITE, Max Supply: 100. For the adminKey and supplyKey, use "current_signer". metaOptions: { adminKeyShouldSign: true }`; // Added Supply Type and Max Supply
+
+      const agentResultNftCreate = await agentExecutorNftCreate.invoke({
+        input: createNftPrompt,
+      });
+      const resultNftCreate = getToolOutputFromResult(agentResultNftCreate);
+      expect(
+        resultNftCreate.success,
+        `Setup for TransferTokens (NFT Collection Creation) failed: ${resultNftCreate.error}`
+      ).toBe(true);
+      expect(
+        resultNftCreate.receipt?.tokenId,
+        'Transfer NFT Collection creation failed to return tokenId'
+      ).toBeDefined();
+      transferSourceNftCollectionId = resultNftCreate.receipt!.tokenId!;
+      createdTokenIds.push(transferSourceNftCollectionId);
+      console.log(
+        `Created TransferNFT Collection ${transferSourceNftCollectionId.toString()} for transfer tests.`
+      );
+
+      // Mint an NFT into the collection
+      const mintNftTool = new HederaMintNftTool({ hederaKit: kit });
+      const agentExecutorNftMint = await createTestAgentExecutor(
+        mintNftTool,
+        openAIApiKey
+      );
+      const metadata = Buffer.from(
+        `NFT for transfer test ${generateUniqueName('Serial')}`
+      ).toString('base64');
+      const mintNftPrompt = `Mint a new NFT into collection ${transferSourceNftCollectionId.toString()} with metadata "${metadata}". metaOptions: { supplyKeyShouldSign: true }`;
+      const agentResultNftMint = await agentExecutorNftMint.invoke({
+        input: mintNftPrompt,
+      });
+      const resultNftMint = getToolOutputFromResult(agentResultNftMint);
+      expect(
+        resultNftMint.success,
+        `Setup for TransferTokens (NFT Mint) failed: ${resultNftMint.error}`
+      ).toBe(true);
+      expect(
+        resultNftMint.receipt?.serials &&
+          resultNftMint.receipt.serials.length > 0,
+        'NFT Mint for transfer test failed to return serials'
+      ).toBe(true);
+      const serialValue = resultNftMint.receipt.serials[0];
+      nftSerialToTransfer =
+        typeof serialValue === 'string'
+          ? parseInt(serialValue, 10)
+          : (serialValue as number);
+      console.log(
+        `Minted NFT serial ${nftSerialToTransfer} from ${transferSourceNftCollectionId.toString()} for transfer tests.`
+      );
+
+      // Associate NFT Collection with sharedSecondaryAccountId using its own signer
+      console.log(
+        `Associating TransferNFT Collection ${transferSourceNftCollectionId.toString()} with ${sharedSecondaryAccountId.toString()} (via secondaryAccountSigner).`
+      );
+      const associateNftTx = new TokenAssociateTransaction()
+        .setAccountId(sharedSecondaryAccountId)
+        .setTokenIds([transferSourceNftCollectionId]);
+      const associateNftReceipt =
+        await secondaryAccountSigner.signAndExecuteTransaction(associateNftTx);
+      expect(associateNftReceipt.status.toString()).toEqual(
+        Status.Success.toString()
+      );
+      console.log(
+        `Associated TransferNFT Collection ${transferSourceNftCollectionId.toString()} with ${sharedSecondaryAccountId.toString()} successfully (via secondaryAccountSigner).`
+      );
+    });
+
+    it('should transfer fungible tokens', async () => {
+      const tool = new HederaTransferTokensTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+      const amountToTransfer = 150;
+
+      const tokenTransfers = [
+        {
+          type: 'fungible',
+          tokenId: transferSourceFtId.toString(),
+          accountId: treasuryAccountId.toString(),
+          amount: -amountToTransfer, // Debiting treasury
+        },
+        {
+          type: 'fungible',
+          tokenId: transferSourceFtId.toString(),
+          accountId: sharedSecondaryAccountId.toString(),
+          amount: amountToTransfer, // Crediting shared account
+        },
+      ];
+
+      const prompt = `Transfer tokens. Token Transfers: ${JSON.stringify(
+        tokenTransfers
+      )}. Memo: "FT Transfer Test"`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(
+        result.success,
+        `Fungible Token Transfer Failed: ${result.error}`
+      ).toBe(true);
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `Successfully transferred ${amountToTransfer} of FT ${transferSourceFtId.toString()} from ${treasuryAccountId.toString()} to ${sharedSecondaryAccountId.toString()}.`
+      );
+    });
+
+    it('should transfer an NFT', async () => {
+      const tool = new HederaTransferTokensTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+
+      const nftTransfer = {
+        type: 'nft',
+        tokenId: transferSourceNftCollectionId.toString(), // Corrected: Pass tokenId
+        serial: nftSerialToTransfer, // Corrected: Pass serial separately
+        senderAccountId: treasuryAccountId.toString(),
+        receiverAccountId: sharedSecondaryAccountId.toString(),
+        isApproved: false, // Treasury (owner) is sending
+      };
+
+      const prompt = `Transfer tokens. Token Transfers: ${JSON.stringify([
+        nftTransfer,
+      ])}. Memo: "NFT Transfer Test"`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(result.success, `NFT Transfer Failed: ${result.error}`).toBe(true);
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `Successfully transferred NFT ${transferSourceNftCollectionId.toString()}.${nftSerialToTransfer} from ${treasuryAccountId.toString()} to ${sharedSecondaryAccountId.toString()}.`
+      );
+    });
+  });
+
+  describe('HederaAirdropTokenTool', () => {
+    let airdropSourceFtId: TokenId;
+    let recipient1ForAirdrop: AccountId;
+    let recipient1Key: SDKPrivateKey;
+    let recipient1Signer: ServerSigner; // << NEW
+    let recipient2ForAirdrop: AccountId;
+    let recipient2Key: SDKPrivateKey;
+    let recipient2Signer: ServerSigner; // << NEW
+
+    beforeAll(async () => {
+      // 1. Create a new fungible token for airdrop
+      const createFtTool = new HederaCreateFungibleTokenTool({
+        hederaKit: kit,
+      });
+      const agentExecutorFtCreate = await createTestAgentExecutor(
+        createFtTool,
+        openAIApiKey
+      );
+      const ftName = generateUniqueName('AirdropFT');
+      const ftSymbol = generateUniqueName('ADFT');
+      const createFtPrompt = `Create a new fungible token. Name: "${ftName}", Symbol: "${ftSymbol}", Initial Supply: 10000, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}. For the adminKey, use "current_signer". metaOptions: { adminKeyShouldSign: true }`;
+
+      const agentResultFtCreate = await agentExecutorFtCreate.invoke({
+        input: createFtPrompt,
+      });
+      const resultFtCreate = getToolOutputFromResult(agentResultFtCreate);
+      expect(
+        resultFtCreate.success,
+        `Setup for Airdrop (Token Creation) failed: ${resultFtCreate.error}`
+      ).toBe(true);
+      airdropSourceFtId = resultFtCreate.receipt!.tokenId!;
+      createdTokenIds.push(airdropSourceFtId);
+      console.log(
+        `Created AirdropFT ${airdropSourceFtId.toString()} for airdrop tests.`
+      );
+
+      // 2. Create recipient accounts and their signers
+      const acc1Details = await createNewTestAccount(kit, 10); // 10 HBAR initial balance
+      recipient1ForAirdrop = acc1Details.accountId;
+      recipient1Key = acc1Details.privateKey;
+      recipient1Signer = new ServerSigner(
+        recipient1ForAirdrop,
+        recipient1Key,
+        kit.network
+      );
+      console.log(
+        `Created recipient account 1: ${recipient1ForAirdrop.toString()} and its signer for airdrop test.`
+      );
+
+      const acc2Details = await createNewTestAccount(kit, 10);
+      recipient2ForAirdrop = acc2Details.accountId;
+      recipient2Key = acc2Details.privateKey;
+      recipient2Signer = new ServerSigner(
+        recipient2ForAirdrop,
+        recipient2Key,
+        kit.network
+      );
+      console.log(
+        `Created recipient account 2: ${recipient2ForAirdrop.toString()} and its signer for airdrop test.`
+      );
+
+      // 3. Associate token with recipient accounts using their own signers
+      const recipientsToAssociate = [
+        { accountId: recipient1ForAirdrop, signer: recipient1Signer },
+        { accountId: recipient2ForAirdrop, signer: recipient2Signer },
+      ];
+
+      for (const recipient of recipientsToAssociate) {
+        console.log(
+          `Associating AirdropFT ${airdropSourceFtId.toString()} with ${recipient.accountId.toString()} using its own signer.`
+        );
+        const associateTx = new TokenAssociateTransaction()
+          .setAccountId(recipient.accountId)
+          .setTokenIds([airdropSourceFtId]);
+
+        const associateReceipt =
+          await recipient.signer.signAndExecuteTransaction(associateTx);
+        expect(associateReceipt.status).toEqual(Status.Success);
+        console.log(
+          `Associated AirdropFT ${airdropSourceFtId.toString()} with ${recipient.accountId.toString()} successfully (via its own signer).`
+        );
+      }
+    });
+
+    it('should airdrop fungible tokens to multiple recipients', async () => {
+      const tool = new HederaAirdropTokenTool({ hederaKit: kit });
+      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
+      const amount1 = 123;
+      const amount2 = 456;
+
+      const recipients = [
+        { accountId: recipient1ForAirdrop.toString(), amount: amount1 },
+        { accountId: recipient2ForAirdrop.toString(), amount: amount2 },
+      ];
+
+      const prompt = `Airdrop token ${airdropSourceFtId.toString()}. Recipients: ${JSON.stringify(
+        recipients
+      )}. Memo: "FT Airdrop Test"`;
+
+      const agentResult = await agentExecutor.invoke({ input: prompt });
+      const result = getToolOutputFromResult(agentResult);
+
+      expect(
+        result.success,
+        `Airdrop Failed: ${result.error} - Intermediate Steps: ${JSON.stringify(
+          agentResult.intermediateSteps
+        )}`
+      ).toBe(true);
+      expect(result.receipt).toBeDefined();
+      expect(result.receipt.status).toEqual('SUCCESS');
+      console.log(
+        `Successfully airdropped ${airdropSourceFtId.toString()} to recipients.`
+      );
+
+      // TODO: Future enhancement - query balances of recipients to verify amounts.
     });
   });
 
@@ -883,89 +1814,6 @@ describe('Hedera HTS Tools Integration Tests', () => {
 
       // To prevent afterAll from trying to delete it again (and failing if it's already gone)
       // we could remove it from createdTokenIds if it was added, but we chose not to add it.
-    });
-  });
-
-  describe('HederaDissociateTokensTool', () => {
-    let dissociatableTokenId: TokenId;
-    // Placeholder for a secondary account ID
-    const secondaryAccountIdString = '0.0.12345';
-    let associationDoneInSetup = false;
-
-    beforeAll(async () => {
-      // 1. Create a token
-      const createTool = new HederaCreateFungibleTokenTool({ hederaKit: kit });
-      let agentExecutor = await createTestAgentExecutor(
-        createTool,
-        openAIApiKey
-      );
-      const tokenName = generateUniqueName('DissociatableFT');
-      const tokenSymbol = generateUniqueName('DFT');
-      const createPrompt = `Create a new fungible token. Name: "${tokenName}", Symbol: "${tokenSymbol}", Initial Supply: 100, Decimals: 0, Treasury Account: ${treasuryAccountId.toString()}. For the adminKey, use "current_signer". metaOptions: { adminKeyShouldSign: true }`;
-
-      let agentResult = await agentExecutor.invoke({ input: createPrompt });
-      let result = getToolOutputFromResult(agentResult);
-      expect(
-        result.success,
-        `Setup for DissociateToken failed (token creation): ${result.error}`
-      ).toBe(true);
-      expect(
-        result.receipt?.tokenId,
-        'Dissociatable FT setup failed to return tokenId'
-      ).toBeDefined();
-      dissociatableTokenId = result.receipt.tokenId!;
-      createdTokenIds.push(dissociatableTokenId);
-      console.log(
-        `Created DissociatableFT ${dissociatableTokenId.toString()} for dissociation tests.`
-      );
-
-      // 2. Attempt to associate this token with the secondary account
-      // This step is expected to FAIL the actual association because secondary account doesn't sign.
-      // However, we include it to mirror a real scenario for dissociation testing.
-      // A successful dissociation requires a prior successful association.
-      const associateTool = new HederaAssociateTokensTool({ hederaKit: kit });
-      agentExecutor = await createTestAgentExecutor(
-        associateTool,
-        openAIApiKey
-      );
-      const associatePrompt = `Associate token ${dissociatableTokenId.toString()} with account ${secondaryAccountIdString}.`;
-      agentResult = await agentExecutor.invoke({ input: associatePrompt });
-      result = getToolOutputFromResult(agentResult);
-      if (result.success) {
-        associationDoneInSetup = true;
-        console.log(
-          `Token ${dissociatableTokenId.toString()} successfully associated with ${secondaryAccountIdString} in setup (unexpected for placeholder).`
-        );
-      } else {
-        associationDoneInSetup = false;
-        console.warn(
-          `Token association with ${secondaryAccountIdString} failed as expected in setup: ${result.error}. Dissociation test will likely also fail transaction.`
-        );
-      }
-    });
-
-    it('should attempt to dissociate a token from a (placeholder) secondary account', async () => {
-      // This test will likely fail the dissociate transaction for the same reasons association would fail
-      // (secondary account needs to sign, or KYC/Freeze issues for that account).
-      // We are testing the tool path and its error reporting.
-      const tool = new HederaDissociateTokensTool({ hederaKit: kit });
-      const agentExecutor = await createTestAgentExecutor(tool, openAIApiKey);
-
-      const prompt = `Dissociate token ${dissociatableTokenId.toString()} from account ${secondaryAccountIdString}.`;
-
-      const agentResult = await agentExecutor.invoke({ input: prompt });
-      const result = getToolOutputFromResult(agentResult);
-
-      // If association didn't happen, dissociation might fail with TOKEN_NOT_ASSOCIATED_TO_ACCOUNT
-      // If association somehow "succeeded" (e.g. if secondaryAccount was operator), then dissociation would need sigs.
-      // Given our setup, we expect a failure that reflects the account not being associated or not being able to sign.
-      expect(result.success).toBe(false);
-      expect(result.error).toBeDefined();
-      console.log(
-        `Dissociation attempt for ${secondaryAccountIdString} from ${dissociatableTokenId.toString()} correctly resulted in a transaction failure (as expected): ${
-          result.error
-        }`
-      );
     });
   });
 });

@@ -12,13 +12,14 @@ const RevokeHbarAllowanceZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'The HBAR owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
+      'Optional. The HBAR owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
     ),
   spenderAccountId: z
     .string()
     .describe(
       'The spender account ID whose HBAR allowance is to be revoked (e.g., "0.0.yyyy").'
     ),
+  memo: z.string().optional().describe('Optional. Memo for the transaction.'),
 });
 
 export class HederaRevokeHbarAllowanceTool extends BaseHederaTransactionTool<
@@ -26,7 +27,7 @@ export class HederaRevokeHbarAllowanceTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-account-revoke-hbar-allowance';
   description =
-    'Revokes/clears an HBAR allowance for a spender by setting it to zero. Requires spenderAccountId. ownerAccountId defaults to operator. Use metaOptions for execution control.';
+    'Revokes/clears an HBAR allowance for a specific spender by approving zero HBAR.';
   specificInputSchema = RevokeHbarAllowanceZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -41,12 +42,8 @@ export class HederaRevokeHbarAllowanceTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof RevokeHbarAllowanceZodSchemaCore>
   ): Promise<void> {
-    const revokeParams: RevokeHbarAllowanceParams = {
-      spenderAccountId: specificArgs.spenderAccountId,
-    };
-    if (specificArgs.ownerAccountId ) {
-      revokeParams.ownerAccountId = specificArgs.ownerAccountId;
-    }
-    (builder as AccountBuilder).revokeHbarAllowance(revokeParams);
+    await (builder as AccountBuilder).revokeHbarAllowance(
+      specificArgs as unknown as RevokeHbarAllowanceParams
+    );
   }
 }

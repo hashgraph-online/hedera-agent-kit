@@ -25,7 +25,7 @@ export class HederaDeleteAccountTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-account-delete';
   description =
-    'Deletes an account. Requires deleteAccountId and transferAccountId. Use metaOptions for execution control.';
+    'Deletes an account, transferring its HBAR balance to another account.';
   specificInputSchema = DeleteAccountZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -40,10 +40,8 @@ export class HederaDeleteAccountTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof DeleteAccountZodSchemaCore>
   ): Promise<void> {
-    const deleteParams: DeleteAccountParams = {
-      deleteAccountId: specificArgs.deleteAccountId,
-      transferAccountId: specificArgs.transferAccountId,
-    };
-    (builder as AccountBuilder).deleteAccount(deleteParams);
+    await (builder as AccountBuilder).deleteAccount(
+      specificArgs as unknown as DeleteAccountParams
+    );
   }
 }

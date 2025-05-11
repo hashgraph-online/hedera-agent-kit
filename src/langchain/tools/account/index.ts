@@ -6,4 +6,6 @@ export * from './approve-hbar-allowance-tool';
 export * from './approve-fungible-token-allowance-tool';
 export * from './approve-token-nft-allowance-tool';
 export * from './revoke-hbar-allowance-tool';
-export * from './revoke-fungible-token-allowance-tool'; 
+export * from './revoke-fungible-token-allowance-tool';
+export * from './delete-nft-spender-allowance-tool';
+export * from './delete-nft-serial-allowances-tool'; 

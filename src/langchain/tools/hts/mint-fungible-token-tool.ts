@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { MintFTParams } from '../../../types';
-import { BigNumber } from 'bignumber.js';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -11,11 +10,11 @@ import { HtsBuilder } from '../../../builders/hts/hts-builder';
 const MintFTZodSchemaCore = z.object({
   tokenId: z
     .string()
-    .describe('The ID of the fungible token to mint for (e.g., "0.0.xxxx").'),
+    .describe('The ID of the fungible token (e.g., "0.0.xxxx").'),
   amount: z
     .union([z.number(), z.string()])
     .describe(
-      'The amount of tokens to mint (smallest unit). Number or string for large values.'
+      'Amount to mint (smallest unit). Number or string for large values. Builder handles conversion.'
     ),
 });
 
@@ -23,8 +22,7 @@ export class HederaMintFungibleTokenTool extends BaseHederaTransactionTool<
   typeof MintFTZodSchemaCore
 > {
   name = 'hedera-hts-mint-fungible-token';
-  description =
-    'Mints more fungible tokens. Requires tokenId and amount. Use metaOptions for execution control.';
+  description = 'Mints more fungible tokens. Requires tokenId and amount.';
   specificInputSchema = MintFTZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -39,13 +37,8 @@ export class HederaMintFungibleTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof MintFTZodSchemaCore>
   ): Promise<void> {
-    const mintParams: MintFTParams = {
-      tokenId: specificArgs.tokenId,
-      amount:
-        typeof specificArgs.amount === 'string'
-          ? new BigNumber(specificArgs.amount)
-          : specificArgs.amount,
-    };
-    (builder as HtsBuilder).mintFungibleToken(mintParams);
+    await (builder as HtsBuilder).mintFungibleToken(
+      specificArgs as unknown as MintFTParams
+    );
   }
 }

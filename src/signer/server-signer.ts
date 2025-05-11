@@ -96,4 +96,12 @@ export class ServerSigner extends AbstractSigner {
   public getOperatorPrivateKey(): PrivateKey {
     return this.privateKey;
   }
+
+  /**
+   * Retrieves the client instance configured for this ServerSigner.
+   * @returns {Client} The Hedera Client object.
+   */
+  public getClient(): Client {
+    return this.client;
+  }
 }

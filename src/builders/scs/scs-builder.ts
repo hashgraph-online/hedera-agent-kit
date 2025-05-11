@@ -4,17 +4,12 @@ import {
   ContractExecuteTransaction,
   ContractUpdateTransaction,
   ContractDeleteTransaction,
-  FileId,
   Hbar,
   Long,
   PrivateKey,
-  PublicKey,
-  Transaction,
-  TransactionReceipt,
-  Timestamp,
+  TransactionId,
   ContractCallQuery,
   ContractFunctionResult,
-  TransactionId,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../../signer/abstract-signer';
@@ -33,10 +28,6 @@ const DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS = 7776000;
  * ScsBuilder facilitates Hedera Smart Contract Service (SCS) transactions.
  */
 export class ScsBuilder extends BaseServiceBuilder {
-  /**
-   * @param {AbstractSigner} signer
-   * @param {Client} basicClient
-   */
   constructor(signer: AbstractSigner, basicClient: Client) {
     super(signer, basicClient);
   }
@@ -65,9 +56,7 @@ export class ScsBuilder extends BaseServiceBuilder {
 
     if (params.adminKey) {
       if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(
-          PrivateKey.fromString(params.adminKey).publicKey
-        );
+        transaction.setAdminKey(PrivateKey.fromString(params.adminKey));
       } else {
         transaction.setAdminKey(params.adminKey);
       }
@@ -178,9 +167,7 @@ export class ScsBuilder extends BaseServiceBuilder {
 
     if (params.adminKey) {
       if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(
-          PrivateKey.fromString(params.adminKey).publicKey
-        );
+        transaction.setAdminKey(PrivateKey.fromString(params.adminKey));
       } else {
         transaction.setAdminKey(params.adminKey);
       }
@@ -246,9 +233,10 @@ export class ScsBuilder extends BaseServiceBuilder {
    * @returns {Promise<ContractFunctionResult>} A promise that resolves to the result of the contract call.
    * @throws {Error} If query execution fails.
    */
-  public async callContract(params: ContractCallQueryParams): Promise<ContractFunctionResult> {
-    const query = new ContractCallQuery()
-      .setContractId(params.contractId);
+  public async callContract(
+    params: ContractCallQueryParams
+  ): Promise<ContractFunctionResult> {
+    const query = new ContractCallQuery().setContractId(params.contractId);
 
     if (params.gas) {
       if (typeof params.gas === 'number') {
@@ -259,30 +247,38 @@ export class ScsBuilder extends BaseServiceBuilder {
     }
 
     if (params.functionName) {
-        if (params.functionParameters) {
-            query.setFunction(params.functionName, params.functionParameters);
-        } else {
-            query.setFunction(params.functionName);
-        }
+      if (params.functionParameters) {
+        query.setFunction(params.functionName, params.functionParameters);
+      } else {
+        query.setFunction(params.functionName);
+      }
     }
 
     if (params.maxQueryPayment) {
-        query.setQueryPayment(params.maxQueryPayment);
+      query.setQueryPayment(params.maxQueryPayment);
     }
 
     if (params.paymentTransactionId) {
-        if (typeof params.paymentTransactionId === 'string') {
-            query.setPaymentTransactionId(TransactionId.fromString(params.paymentTransactionId));
-        } else {
-            query.setPaymentTransactionId(params.paymentTransactionId);
-        }
+      if (typeof params.paymentTransactionId === 'string') {
+        query.setPaymentTransactionId(
+          TransactionId.fromString(params.paymentTransactionId)
+        );
+      } else {
+        query.setPaymentTransactionId(params.paymentTransactionId);
+      }
     }
 
     try {
-      this.logger.info(`Executing ContractCallQuery for contract ${params.contractId.toString()}`);
+      this.logger.info(
+        `Executing ContractCallQuery for contract ${params.contractId.toString()}`
+      );
       return await query.execute(this.basicClient);
-    } catch (error: any) {
-      this.logger.error(`ContractCallQuery failed for contract ${params.contractId.toString()}: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `ContractCallQuery failed for contract ${params.contractId.toString()}: ${
+          error instanceof Error ? error.message : JSON.stringify(error)
+        }`
+      );
       throw error;
     }
   }

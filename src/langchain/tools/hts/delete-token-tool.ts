@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DeleteTokenParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -32,6 +33,8 @@ export class HederaDeleteTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof DeleteTokenZodSchemaCore>
   ): Promise<void> {
-    (builder as HtsBuilder).deleteToken({ tokenId: specificArgs.tokenId });
+    await (builder as HtsBuilder).deleteToken(
+      specificArgs as unknown as DeleteTokenParams
+    );
   }
 }

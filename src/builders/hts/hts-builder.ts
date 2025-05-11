@@ -2,13 +2,9 @@ import {
   AccountId,
   Client,
   CustomFee,
-  PrivateKey,
-  PublicKey,
   TokenCreateTransaction,
   TokenSupplyType,
   TokenType,
-  TransactionReceipt,
-  Transaction,
   TokenId,
   Long,
   TokenMintTransaction,
@@ -27,17 +23,16 @@ import {
   TokenUpdateTransaction,
   TokenDeleteTransaction,
   TokenFeeScheduleUpdateTransaction,
-  Timestamp,
   NftId,
-  Key,
   TokenAirdropTransaction,
   TokenClaimAirdropTransaction,
   TokenCancelAirdropTransaction,
   TokenRejectTransaction,
-  PendingAirdropId,
+  CustomFixedFee,
+  CustomFractionalFee,
+  CustomRoyaltyFee,
   KeyList,
 } from '@hashgraph/sdk';
-import BigNumber from 'bignumber.js';
 import { AbstractSigner } from '../../signer/abstract-signer';
 import {
   FTCreateParams,
@@ -51,7 +46,6 @@ import {
   DissociateTokensParams,
   TransferTokensParams,
   FungibleTokenTransferSpec,
-  NonFungibleTokenTransferSpec,
   WipeTokenAccountParams,
   FreezeTokenAccountParams,
   UnfreezeTokenAccountParams,
@@ -63,7 +57,6 @@ import {
   DeleteTokenParams,
   TokenFeeScheduleUpdateParams,
   AirdropTokenParams,
-  AirdropRecipient,
   ClaimAirdropParams,
   CancelAirdropParams,
   RejectAirdropParams,
@@ -77,79 +70,16 @@ const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
  * HtsBuilder facilitates the construction and execution of Hedera Token Service (HTS) transactions.
  */
 export class HtsBuilder extends BaseServiceBuilder {
-  /**
-   * @param {AbstractSigner} signer
-   * @param {Client} basicClient
-   */
   constructor(signer: AbstractSigner, basicClient: Client) {
     super(signer, basicClient);
   }
 
-  private parseKey(
-    keyInput?: string | PublicKey | Key | null
-  ): Key | undefined {
-    if (keyInput === undefined || keyInput === null) {
-      return undefined;
-    }
-    if (
-      typeof keyInput === 'object' &&
-      ('_key' in keyInput ||
-        keyInput instanceof PublicKey ||
-        keyInput instanceof PrivateKey ||
-        keyInput instanceof KeyList)
-    ) {
-      return keyInput as Key;
-    }
-    if (typeof keyInput === 'string') {
-      try {
-        return PublicKey.fromString(keyInput);
-      } catch (e) {
-        try {
-          return PrivateKey.fromString(keyInput).publicKey;
-        } catch (e2) {
-          this.logger.error(
-            `Failed to parse key string as PublicKey or PrivateKey: ${keyInput.substring(
-              0,
-              30
-            )}...`,
-            { error1: (e as any).message, error2: (e2 as any).message }
-          );
-          throw new Error(
-            `Invalid key string format: ${keyInput.substring(0, 30)}...`
-          );
-        }
-      }
-    }
-    this.logger.warn(
-      `parseKey received an object that is not an SDK Key instance and not a string: ${JSON.stringify(
-        keyInput
-      )}`
-    );
-    return undefined;
-  }
-
-  private parseAmount(amount?: number | string | Long | BigNumber): Long {
-    if (amount === undefined) {
-      return Long.fromNumber(0);
-    }
-    if (typeof amount === 'number') {
-      return Long.fromNumber(amount);
-    }
-    if (typeof amount === 'string') {
-      return Long.fromString(amount);
-    }
-    if (amount instanceof BigNumber) {
-      return Long.fromString(amount.toString());
-    }
-    return amount;
-  }
-
   /**
    * @param {FTCreateParams} params
-   * @returns {this}
+   * @returns {Promise<this>}
    * @throws {Error}
    */
-  public createFungibleToken(params: FTCreateParams): this {
+  public async createFungibleToken(params: FTCreateParams): Promise<this> {
     const transaction = new TokenCreateTransaction()
       .setTokenName(params.tokenName)
       .setTokenSymbol(params.tokenSymbol)
@@ -163,25 +93,32 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setMaxSupply(this.parseAmount(params.maxSupply));
     }
     if (params.adminKey) {
-      transaction.setAdminKey(this.parseKey(params.adminKey)!);
+      const parsedKey = await this.parseKey(params.adminKey);
+      if (parsedKey) transaction.setAdminKey(parsedKey);
     }
     if (params.kycKey) {
-      transaction.setKycKey(this.parseKey(params.kycKey)!);
+      const parsedKey = await this.parseKey(params.kycKey);
+      if (parsedKey) transaction.setKycKey(parsedKey);
     }
     if (params.freezeKey) {
-      transaction.setFreezeKey(this.parseKey(params.freezeKey)!);
+      const parsedKey = await this.parseKey(params.freezeKey);
+      if (parsedKey) transaction.setFreezeKey(parsedKey);
     }
     if (params.wipeKey) {
-      transaction.setWipeKey(this.parseKey(params.wipeKey)!);
+      const parsedKey = await this.parseKey(params.wipeKey);
+      if (parsedKey) transaction.setWipeKey(parsedKey);
     }
     if (params.supplyKey) {
-      transaction.setSupplyKey(this.parseKey(params.supplyKey)!);
+      const parsedKey = await this.parseKey(params.supplyKey);
+      if (parsedKey) transaction.setSupplyKey(parsedKey);
     }
     if (params.feeScheduleKey) {
-      transaction.setFeeScheduleKey(this.parseKey(params.feeScheduleKey)!);
+      const parsedKey = await this.parseKey(params.feeScheduleKey);
+      if (parsedKey) transaction.setFeeScheduleKey(parsedKey);
     }
     if (params.pauseKey) {
-      transaction.setPauseKey(this.parseKey(params.pauseKey)!);
+      const parsedKey = await this.parseKey(params.pauseKey);
+      if (parsedKey) transaction.setPauseKey(parsedKey);
     }
     if (params.memo) {
       transaction.setTokenMemo(params.memo);
@@ -204,10 +141,10 @@ export class HtsBuilder extends BaseServiceBuilder {
 
   /**
    * @param {NFTCreateParams} params
-   * @returns {this}
+   * @returns {Promise<this>}
    * @throws {Error}
    */
-  public createNonFungibleToken(params: NFTCreateParams): this {
+  public async createNonFungibleToken(params: NFTCreateParams): Promise<this> {
     const transaction = new TokenCreateTransaction()
       .setTokenName(params.tokenName)
       .setTokenSymbol(params.tokenSymbol)
@@ -221,25 +158,32 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setMaxSupply(this.parseAmount(params.maxSupply));
     }
     if (params.adminKey) {
-      transaction.setAdminKey(this.parseKey(params.adminKey)!);
+      const parsedKey = await this.parseKey(params.adminKey);
+      if (parsedKey) transaction.setAdminKey(parsedKey);
     }
     if (params.kycKey) {
-      transaction.setKycKey(this.parseKey(params.kycKey)!);
+      const parsedKey = await this.parseKey(params.kycKey);
+      if (parsedKey) transaction.setKycKey(parsedKey);
     }
     if (params.freezeKey) {
-      transaction.setFreezeKey(this.parseKey(params.freezeKey)!);
+      const parsedKey = await this.parseKey(params.freezeKey);
+      if (parsedKey) transaction.setFreezeKey(parsedKey);
     }
     if (params.wipeKey) {
-      transaction.setWipeKey(this.parseKey(params.wipeKey)!);
+      const parsedKey = await this.parseKey(params.wipeKey);
+      if (parsedKey) transaction.setWipeKey(parsedKey);
     }
     if (params.supplyKey) {
-      transaction.setSupplyKey(this.parseKey(params.supplyKey)!);
+      const parsedKey = await this.parseKey(params.supplyKey);
+      if (parsedKey) transaction.setSupplyKey(parsedKey);
     }
     if (params.feeScheduleKey) {
-      transaction.setFeeScheduleKey(this.parseKey(params.feeScheduleKey)!);
+      const parsedKey = await this.parseKey(params.feeScheduleKey);
+      if (parsedKey) transaction.setFeeScheduleKey(parsedKey);
     }
     if (params.pauseKey) {
-      transaction.setPauseKey(this.parseKey(params.pauseKey)!);
+      const parsedKey = await this.parseKey(params.pauseKey);
+      if (parsedKey) transaction.setPauseKey(parsedKey);
     }
     if (params.memo) {
       transaction.setTokenMemo(params.memo);
@@ -389,29 +333,50 @@ export class HtsBuilder extends BaseServiceBuilder {
     const transaction = new TransferTransaction();
 
     if (params.tokenTransfers && params.tokenTransfers.length > 0) {
-      for (const transfer of params.tokenTransfers) {
-        if (transfer.type === 'fungible') {
-          const fungibleTransfer = transfer as FungibleTokenTransferSpec;
+      for (const transferInput of params.tokenTransfers) {
+        if (transferInput.type === 'fungible') {
+          const fungibleTransfer = transferInput as FungibleTokenTransferSpec;
           transaction.addTokenTransfer(
             typeof fungibleTransfer.tokenId === 'string'
               ? TokenId.fromString(fungibleTransfer.tokenId)
               : fungibleTransfer.tokenId,
-            fungibleTransfer.accountId,
+            typeof fungibleTransfer.accountId === 'string'
+              ? AccountId.fromString(fungibleTransfer.accountId)
+              : fungibleTransfer.accountId,
             this.parseAmount(fungibleTransfer.amount)
           );
-        } else if (transfer.type === 'nft') {
-          const nftTransfer = transfer as NonFungibleTokenTransferSpec;
-          if (nftTransfer.isApproved) {
+        } else if (transferInput.type === 'nft') {
+          const toolNftInput = transferInput as any;
+
+          const sdkTokenId = TokenId.fromString(toolNftInput.tokenId as string);
+
+          let serialValueForLong: number | Long;
+          if (typeof toolNftInput.serial === 'string') {
+            serialValueForLong = parseInt(toolNftInput.serial, 10);
+          } else {
+            serialValueForLong = toolNftInput.serial as number | Long;
+          }
+          const sdkSerial = Long.fromValue(serialValueForLong);
+          const sdkNftId = new NftId(sdkTokenId, sdkSerial);
+
+          const senderAccountId = AccountId.fromString(
+            toolNftInput.senderAccountId as string
+          );
+          const receiverAccountId = AccountId.fromString(
+            toolNftInput.receiverAccountId as string
+          );
+
+          if (toolNftInput.isApproved) {
             transaction.addApprovedNftTransfer(
-              nftTransfer.nftId,
-              nftTransfer.senderAccountId,
-              nftTransfer.receiverAccountId
+              sdkNftId,
+              senderAccountId,
+              receiverAccountId
             );
           } else {
             transaction.addNftTransfer(
-              nftTransfer.nftId,
-              nftTransfer.senderAccountId,
-              nftTransfer.receiverAccountId
+              sdkNftId,
+              senderAccountId,
+              receiverAccountId
             );
           }
         }
@@ -419,10 +384,15 @@ export class HtsBuilder extends BaseServiceBuilder {
     }
 
     if (params.hbarTransfers && params.hbarTransfers.length > 0) {
-      for (const hbarTransfer of params.hbarTransfers) {
+      for (const hbarInput of params.hbarTransfers) {
+        const sdkHbarAmount = Hbar.fromTinybars(
+          hbarInput.amount as unknown as string | number
+        );
         transaction.addHbarTransfer(
-          hbarTransfer.accountId,
-          hbarTransfer.amount
+          typeof hbarInput.accountId === 'string'
+            ? AccountId.fromString(hbarInput.accountId)
+            : hbarInput.accountId,
+          sdkHbarAmount
         );
       }
     }
@@ -552,10 +522,10 @@ export class HtsBuilder extends BaseServiceBuilder {
 
   /**
    * @param {UpdateTokenParams} params
-   * @returns {this}
+   * @returns {Promise<this>}
    * @throws {Error}
    */
-  public updateToken(params: UpdateTokenParams): this {
+  public async updateToken(params: UpdateTokenParams): Promise<this> {
     if (!params.tokenId) {
       throw new Error('Token ID is required to update a token.');
     }
@@ -585,35 +555,35 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (Object.prototype.hasOwnProperty.call(params, 'adminKey')) {
       if (params.adminKey === null) transaction.setAdminKey(new KeyList());
       else if (params.adminKey) {
-        const pk = this.parseKey(params.adminKey);
+        const pk = await this.parseKey(params.adminKey);
         if (pk) transaction.setAdminKey(pk);
       }
     }
     if (Object.prototype.hasOwnProperty.call(params, 'kycKey')) {
       if (params.kycKey === null) transaction.setKycKey(new KeyList());
       else if (params.kycKey) {
-        const pk = this.parseKey(params.kycKey);
+        const pk = await this.parseKey(params.kycKey);
         if (pk) transaction.setKycKey(pk);
       }
     }
     if (Object.prototype.hasOwnProperty.call(params, 'freezeKey')) {
       if (params.freezeKey === null) transaction.setFreezeKey(new KeyList());
       else if (params.freezeKey) {
-        const pk = this.parseKey(params.freezeKey);
+        const pk = await this.parseKey(params.freezeKey);
         if (pk) transaction.setFreezeKey(pk);
       }
     }
     if (Object.prototype.hasOwnProperty.call(params, 'wipeKey')) {
       if (params.wipeKey === null) transaction.setWipeKey(new KeyList());
       else if (params.wipeKey) {
-        const pk = this.parseKey(params.wipeKey);
+        const pk = await this.parseKey(params.wipeKey);
         if (pk) transaction.setWipeKey(pk);
       }
     }
     if (Object.prototype.hasOwnProperty.call(params, 'supplyKey')) {
       if (params.supplyKey === null) transaction.setSupplyKey(new KeyList());
       else if (params.supplyKey) {
-        const pk = this.parseKey(params.supplyKey);
+        const pk = await this.parseKey(params.supplyKey);
         if (pk) transaction.setSupplyKey(pk);
       }
     }
@@ -621,14 +591,14 @@ export class HtsBuilder extends BaseServiceBuilder {
       if (params.feeScheduleKey === null)
         transaction.setFeeScheduleKey(new KeyList());
       else if (params.feeScheduleKey) {
-        const pk = this.parseKey(params.feeScheduleKey);
+        const pk = await this.parseKey(params.feeScheduleKey);
         if (pk) transaction.setFeeScheduleKey(pk);
       }
     }
     if (Object.prototype.hasOwnProperty.call(params, 'pauseKey')) {
       if (params.pauseKey === null) transaction.setPauseKey(new KeyList());
       else if (params.pauseKey) {
-        const pk = this.parseKey(params.pauseKey);
+        const pk = await this.parseKey(params.pauseKey);
         if (pk) transaction.setPauseKey(pk);
       }
     }
@@ -686,13 +656,61 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (!params.tokenId) {
       throw new Error('Token ID is required to update fee schedule.');
     }
+
+    const sdkCustomFees: CustomFee[] = params.customFees.map((feeData: any) => {
+      const feeCollectorAccountId = AccountId.fromString(
+        feeData.feeCollectorAccountId
+      );
+
+      if (feeData.type === 'FIXED') {
+        const fixedFee = new CustomFixedFee()
+          .setFeeCollectorAccountId(feeCollectorAccountId)
+          .setAmount(this.parseAmount(feeData.amount));
+        if (feeData.denominatingTokenId) {
+          fixedFee.setDenominatingTokenId(
+            TokenId.fromString(feeData.denominatingTokenId)
+          );
+        }
+        return fixedFee;
+      } else if (feeData.type === 'FRACTIONAL') {
+        const fractionalFee = new CustomFractionalFee()
+          .setFeeCollectorAccountId(feeCollectorAccountId)
+          .setNumerator(this.parseAmount(feeData.numerator))
+          .setDenominator(this.parseAmount(feeData.denominator));
+        if (feeData.assessmentMethodInclusive !== undefined) {
+          fractionalFee.setAssessmentMethod(feeData.assessmentMethodInclusive);
+        }
+        return fractionalFee;
+      } else if (feeData.type === 'ROYALTY') {
+        const royaltyFee = new CustomRoyaltyFee()
+          .setFeeCollectorAccountId(feeCollectorAccountId)
+          .setNumerator(this.parseAmount(feeData.numerator))
+          .setDenominator(this.parseAmount(feeData.denominator));
+        if (feeData.fallbackFee) {
+          const fallback = new CustomFixedFee()
+            .setFeeCollectorAccountId(
+              AccountId.fromString(feeData.fallbackFee.feeCollectorAccountId)
+            )
+            .setAmount(this.parseAmount(feeData.fallbackFee.amount));
+          if (feeData.fallbackFee.denominatingTokenId) {
+            fallback.setDenominatingTokenId(
+              TokenId.fromString(feeData.fallbackFee.denominatingTokenId)
+            );
+          }
+          royaltyFee.setFallbackFee(fallback);
+        }
+        return royaltyFee;
+      }
+      throw new Error(`Unsupported custom fee type: ${feeData.type}`);
+    });
+
     const transaction = new TokenFeeScheduleUpdateTransaction()
       .setTokenId(
         typeof params.tokenId === 'string'
           ? TokenId.fromString(params.tokenId)
           : params.tokenId
       )
-      .setCustomFees(params.customFees);
+      .setCustomFees(sdkCustomFees);
     this.setCurrentTransaction(transaction);
     return this;
   }

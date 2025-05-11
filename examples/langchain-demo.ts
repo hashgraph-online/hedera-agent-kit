@@ -12,12 +12,8 @@ dotenv.config(); // Load environment variables from .env file
 import { HederaAgentKit } from '../src/agent';
 import { ServerSigner } from '../src/signer/server-signer';
 import { HederaNetworkType } from '../src/signer/abstract-signer';
-
-// Import a couple of example tools (ensure these files exist and export the tools)
-// For HCS tools (assuming they are in individual files now)
-import { HederaCreateTopicTool } from '../src/langchain/tools/hcs/create-topic-tool';
-// For HTS tools (assuming they are in individual files now)
-// import { HederaCreateFungibleTokenTool } from '../src/langchain/tools/hts/create-fungible-token-tool';
+import { Hbar, Transaction, TransactionId } from '@hashgraph/sdk';
+import { Buffer } from 'buffer';
 
 import { ChatOpenAI } from '@langchain/openai';
 import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
@@ -25,17 +21,28 @@ import {
   ChatPromptTemplate,
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
-import { AIMessage, HumanMessage } from "@langchain/core/messages";
-// import { ConversationTokenBufferMemory } from 'langchain/memory'; // Using simple chat history for now
+import { AIMessage, HumanMessage } from '@langchain/core/messages';
+import * as readline from 'readline';
+
+// Function to create readline interface
+function createInterface() {
+  return readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+}
 
 async function main() {
-  console.log('Starting Hedera Agent Kit LangChain Demo...');
+  console.log('Starting Hedera Agent Kit Interactive LangChain Demo...');
 
-  // --- 1. Load Environment Variables ---
-  const operatorId = process.env.HEDERA_OPERATOR_ID;
-  const operatorKey = process.env.HEDERA_OPERATOR_KEY;
-  const network = (process.env.HEDERA_NETWORK || 'testnet') as HederaNetworkType;
+  const operatorId = process.env.HEDERA_ACCOUNT_ID;
+  const operatorKey = process.env.HEDERA_PRIVATE_KEY;
+  const network = (process.env.HEDERA_NETWORK ||
+    'testnet') as HederaNetworkType;
   const openaiApiKey = process.env.OPENAI_API_KEY;
+
+  const userAccountId = process.env.USER_ACCOUNT_ID;
+  const userPrivateKey = process.env.USER_PRIVATE_KEY;
 
   if (!operatorId || !operatorKey) {
     throw new Error(
@@ -45,101 +52,233 @@ async function main() {
   if (!openaiApiKey) {
     throw new Error('OPENAI_API_KEY must be set in .env');
   }
-  if (network !== 'testnet' && network !== 'mainnet') {
-    throw new Error('HEDERA_NETWORK in .env must be \'testnet\' or \'mainnet\'.')
+
+  console.log(
+    `Using Operator ID (Agent's Signer): ${operatorId} on ${network}`
+  );
+  if (userAccountId && userPrivateKey) {
+    console.log(
+      `User Account ID (for user-signed transactions): ${userAccountId} is configured.`
+    );
+  } else {
+    console.warn(
+      'USER_ACCOUNT_ID and/or USER_PRIVATE_KEY are not set in .env. User-signed execution will not be available for this demo.'
+    );
   }
 
-  console.log(`Using Operator ID: ${operatorId} on ${network}`);
-
-  // --- 2. Initialize Signer --- 
-  const signer = new ServerSigner(operatorId, operatorKey, network);
-  console.log('ServerSigner initialized.');
-
-  // --- 3. Initialize HederaAgentKit ---
-  // For this demo, pluginConfig is kept minimal. 
-  // To demonstrate plugin loading, provide actual directories or packages.
-  const kit = new HederaAgentKit(signer, { /* directories: ['./plugins'] */ });
-  console.log('HederaAgentKit instance created.');
-
-  // --- 4. Initialize the Kit (Loads tools, including plugins if configured) ---
+  const agentSigner = new ServerSigner(operatorId, operatorKey, network);
+  const kit = new HederaAgentKit(agentSigner, {});
   await kit.initialize();
-  console.log('HederaAgentKit initialized (tools loaded).');
 
-  // --- 5. Get Aggregated Tools from the Kit ---
-  // Note: The user added // @ts-ignore for the aggregatedTools assignment in HederaAgentKit
-  // This might mean the actual tool instances have schema issues that are suppressed there.
-  const tools = kit.getAggregatedLangChainTools(); 
-  console.log(`Retrieved ${tools.length} tools from HederaAgentKit.`);
-  
-  if (tools.length === 0) {
-    console.warn('No tools were loaded. Ensure HederaCreateTopicTool is instantiated in HederaAgentKit.initialize and that the kit is importing it.');
-    if (!tools.some(t => t.name === 'hedera-hcs-create-topic')) {
-        console.log('Manually adding HederaCreateTopicTool for demo as it was not found in kit.aggregatedTools');
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore - Bypassing LangChain tool type compatibility issue for demo purposes
-        tools.push(new HederaCreateTopicTool({ hederaKit: kit }));
-    }
-    // Add more tools manually if needed for the demo scenario
+  const allToolsFromKit = kit.getAggregatedLangChainTools();
+  const requiredToolNames = [
+    'hedera-hcs-create-topic',
+    'hedera-hcs-submit-message',
+    'hedera-account-transfer-hbar',
+  ];
+  const tools = allToolsFromKit.filter((tool) =>
+    requiredToolNames.includes(tool.name)
+  );
+
+  if (tools.length !== requiredToolNames.length) {
+    const missing = requiredToolNames.filter(
+      (tn) => !tools.find((t) => t.name === tn)
+    );
+    throw new Error(
+      `Demo requires tools: ${missing.join(
+        ', '
+      )} but they were not found in the kit.`
+    );
   }
-  
-  console.log('Available tools for agent:', tools.map(tool => tool.name));
+  console.log(
+    `Using ${tools.length} tools for the agent:`,
+    tools.map((tool) => tool.name)
+  );
 
-  // --- 6. Set up LangChain LLM, Prompt, and Memory ---
   const llm = new ChatOpenAI({
     apiKey: openaiApiKey,
-    modelName: process.env.OPENAI_MODEL_NAME || 'gpt-3.5-turbo-0125', // or gpt-4o etc.
-    temperature: 0.7,
+    modelName: process.env.OPENAI_MODEL_NAME || 'gpt-4o-mini',
+    temperature: 0.1,
   });
 
-  // Using a simple chat history array instead of ConversationTokenBufferMemory for this basic demo
   const chatHistory: (HumanMessage | AIMessage)[] = [];
 
+  let systemMessage =
+    `You are a helpful Hedera assistant for account ${operatorId}. You have tools to prepare and execute Hedera transactions, or to provide transaction bytes.\n` +
+    `When using tools, provide all necessary parameters clearly to make the transaction valid (e.g., for HBAR transfers, ensure debits and credits sum to zero. If the user asks to transfer from *their* account, like ${
+      userAccountId || 'a user-specified account'
+    }, make sure the debit in the transfer list correctly reflects that account).\n` +
+    `If the user explicitly asks for "transaction bytes", "bytes to sign", or says they "want to sign it myself" (especially if they mention it's from *their* account like ${
+      userAccountId || 'a user-specified account'
+    }), your tool call MUST include the metaOption 'returnBytes: true'. When you provide these bytes, clearly state that the demo script will help the user sign these with their own account if they wish.\n` +
+    `Otherwise, if the user asks you to perform an action (e.g., "transfer HBAR", "create a topic") and does NOT ask for bytes, execute the transaction directly; your account ${operatorId} will pay.\n` +
+    `Be concise in your responses. When providing bytes as a result of a tool call, ensure the output is the structured JSON containing the 'transactionBytes' field.`;
+
+  if (userAccountId) {
+    systemMessage += `The user also has a personal account ID: ${userAccountId}. If they ask to perform a transaction from THEIR account (e.g., "transfer HBAR from my account ${userAccountId}") AND explicitly ask for bytes to sign, use the appropriate tool with 'returnBytes: true'. The demo script will then guide them to sign these bytes with their account ${userAccountId}.\n`;
+  }
+  systemMessage += 'Be concise in your responses.';
+
   const prompt = ChatPromptTemplate.fromMessages([
-    ['system', 'You are a helpful assistant with access to Hedera specific tools. When asked to perform a Hedera transaction, use the available tools. Be concise.'],
+    ['system', systemMessage],
     new MessagesPlaceholder('chat_history'),
     ['human', '{input}'],
     new MessagesPlaceholder('agent_scratchpad'),
   ]);
 
-  // --- 7. Create LangChain Agent and Executor ---
   const agent = await createOpenAIToolsAgent({ llm, tools, prompt });
-  const agentExecutor = new AgentExecutor({
-    agent,
-    tools,
-    verbose: true, // Set to true for detailed agent logs
-  });
-  console.log('LangChain agent and executor created.');
+  const agentExecutor = new AgentExecutor({ agent, tools, verbose: false });
+  console.log('LangChain agent and executor created. Type "exit" to quit.');
 
-  // --- 8. Example Invocation ---
-  const input1 = "Create a new HCS topic with the memo 'My First Topic via AgentKit Demo' and get me the transaction bytes.";
-  console.log(`\nInvoking agent with: "${input1}"`);
-  
-  try {
-    const result1 = await agentExecutor.invoke({
-      input: input1,
-      chat_history: chatHistory,
-    });
-    console.log('Agent Result 1:', result1.output);
-    chatHistory.push(new HumanMessage(input1));
-    chatHistory.push(new AIMessage(JSON.stringify(result1.output))); // Storing output for context
+  const rl = createInterface();
 
-    // Example 2: Execute a transaction (if previous gave bytes for a simple one)
-    // This part is more complex as it requires taking bytes and submitting them.
-    // The current tools are designed to either execute OR give bytes based on an option.
-    // For a second call, we might ask it to execute a pre-defined operation.
-    const input2 = "Create another HCS topic, this time with the memo 'Second Topic - Execute directly' and execute it.";
-    console.log(`\nInvoking agent with: "${input2}"`);
-    const result2 = await agentExecutor.invoke({
-        input: input2,
-        chat_history: chatHistory,
-    });
-    console.log('Agent Result 2:', result2.output);
+  async function handleUserSignedExecution(transactionBytesBase64: string) {
+    if (!userAccountId || !userPrivateKey) {
+      console.log(
+        'Agent > USER_ACCOUNT_ID and USER_PRIVATE_KEY are not set in .env file. User cannot sign.'
+      );
+      chatHistory.push(
+        new AIMessage(
+          'User keys not configured in .env, so I cannot proceed with user signing.'
+        )
+      );
+      return;
+    }
 
-  } catch (e) {
-    console.error('Error during agent invocation:', e);
+    console.log(
+      `Agent > Attempting to prepare and execute transaction with user account ${userAccountId}...`
+    );
+    try {
+      const userSigner = new ServerSigner(
+        userAccountId,
+        userPrivateKey,
+        network
+      );
+      const txBytes = Buffer.from(
+        transactionBytesBase64.replace(/`/g, '').trim(),
+        'base64'
+      );
+      let transaction = Transaction.fromBytes(txBytes);
+
+      const frozenTx = await transaction.freezeWith(userSigner.getClient());
+      const signedTx = await frozenTx.sign(userSigner.getOperatorPrivateKey());
+      const response = await signedTx.execute(userSigner.getClient());
+      const receipt = await response.getReceipt(userSigner.getClient());
+
+      console.log(
+        'Agent > Transaction executed with your key. Receipt:',
+        JSON.stringify(receipt.toJSON())
+      );
+      chatHistory.push(
+        new AIMessage(
+          `Transaction executed with your key. Receipt: ${JSON.stringify(
+            receipt.toJSON()
+          )}`
+        )
+      );
+    } catch (e: any) {
+      console.error('Agent > Error executing transaction with user key:', e);
+      chatHistory.push(
+        new AIMessage(
+          `Sorry, I encountered an error executing that with your key: ${
+            e.message || String(e)
+          }`
+        )
+      );
+    }
   }
 
-  console.log('\nDemo finished.');
+  function askQuestion() {
+    rl.question('User > ', async (input) => {
+      if (input.toLowerCase() === 'exit') {
+        rl.close();
+        console.log('\nInteractive demo finished.');
+        return;
+      }
+
+      try {
+        console.log(`\nInvoking agent with: "${input}"`);
+        const result = await agentExecutor.invoke({
+          input: input,
+          chat_history: chatHistory,
+        });
+
+        let agentOutputContent = result.output;
+        console.log('Agent > ', agentOutputContent);
+        chatHistory.push(new HumanMessage(input));
+
+        let transactionBytesFound: string | null = null;
+
+        if (
+          typeof agentOutputContent === 'object' &&
+          agentOutputContent !== null
+        ) {
+          if ((agentOutputContent as any).transactionBytes) {
+            transactionBytesFound = (agentOutputContent as any)
+              .transactionBytes;
+
+            const messageToLog =
+              typeof result.output === 'string'
+                ? result.output
+                : JSON.stringify(result.output);
+            chatHistory.push(new AIMessage(messageToLog));
+          } else if ((agentOutputContent as any).receipt) {
+            chatHistory.push(
+              new AIMessage(
+                `Transaction executed by agent. Receipt: ${JSON.stringify(
+                  (agentOutputContent as any).receipt?.toJSON()
+                )}`
+              )
+            );
+          } else {
+            chatHistory.push(new AIMessage(JSON.stringify(agentOutputContent)));
+          }
+        } else if (typeof agentOutputContent === 'string') {
+          const byteMatch = agentOutputContent.match(
+            /`{0,3}([A-Za-z0-9+/=]{20,})`{0,3}/
+          );
+          if (byteMatch && byteMatch[1]) {
+            transactionBytesFound = byteMatch[1];
+          }
+          chatHistory.push(new AIMessage(agentOutputContent));
+        }
+
+        if (transactionBytesFound) {
+          if (userAccountId && userPrivateKey) {
+            const finalBytes = transactionBytesFound;
+            rl.question(
+              `Agent > Transaction bytes received. Do you want to sign and execute this transaction with YOUR account ${userAccountId}? (y/n): `,
+              async (answer) => {
+                if (answer.toLowerCase() === 'y') {
+                  await handleUserSignedExecution(finalBytes);
+                } else {
+                  chatHistory.push(
+                    new AIMessage('Okay, transaction not executed by user.')
+                  );
+                }
+                askQuestion();
+              }
+            );
+            return;
+          } else {
+            chatHistory.push(
+              new AIMessage(
+                'Transaction bytes were generated, but your user keys are not configured in .env to attempt signing.'
+              )
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error during agent invocation:', e);
+        chatHistory.push(new HumanMessage(input));
+        chatHistory.push(
+          new AIMessage('Sorry, I encountered an error processing that.')
+        );
+      }
+      askQuestion();
+    });
+  }
+  askQuestion();
 }
 
-main().catch(console.error); 
+main().catch(console.error);

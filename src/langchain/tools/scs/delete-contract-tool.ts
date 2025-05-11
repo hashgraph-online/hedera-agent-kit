@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import { HederaAgentKit } from '../../../agent';
 import { DeleteContractParams } from '../../../types';
-import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
-import { ContractId, AccountId } from '@hashgraph/sdk';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -18,13 +15,13 @@ const DeleteContractZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'Optional. Account ID to transfer contract balance to. Use this OR transferContractId if contract has balance.'
+      'Optional. Account ID to transfer balance to. Builder validates if needed.'
     ),
   transferContractId: z
     .string()
     .optional()
     .describe(
-      'Optional. Contract ID to transfer contract balance to. Use this OR transferAccountId if contract has balance.'
+      'Optional. Contract ID to transfer balance to. Builder validates if needed.'
     ),
 });
 
@@ -33,7 +30,7 @@ export class HederaDeleteContractTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-scs-delete-contract';
   description =
-    'Deletes a smart contract. Requires contractId. Optionally specify transferAccountId or transferContractId if contract has balance. Use metaOptions for execution control.';
+    'Deletes a smart contract. Optionally specify a transfer target for any remaining balance.';
   specificInputSchema = DeleteContractZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -48,15 +45,8 @@ export class HederaDeleteContractTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof DeleteContractZodSchemaCore>
   ): Promise<void> {
-    const deleteParams: DeleteContractParams = {
-      contractId: specificArgs.contractId,
-    };
-    if (specificArgs.transferAccountId) {
-      deleteParams.transferAccountId = specificArgs.transferAccountId;
-    }
-    if (specificArgs.transferContractId) {
-      deleteParams.transferContractId = specificArgs.transferContractId;
-    }
-    (builder as ScsBuilder).deleteContract(deleteParams);
+    await (builder as ScsBuilder).deleteContract(
+      specificArgs as unknown as DeleteContractParams
+    );
   }
 }

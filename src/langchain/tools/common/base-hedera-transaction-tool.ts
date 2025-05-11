@@ -64,10 +64,8 @@ export interface BaseHederaTransactionToolParams extends ToolParams {
   logger?: StandardsSdkLogger;
 }
 
-// S is the Zod schema for the *specific inputs* of the derived tool (excluding metaOptions)
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - To handle Zod schema compatibility issues with ToolInputSchemaBase at this generic level
 export abstract class BaseHederaTransactionTool<
+  //@ts-ignore
   S extends z.ZodObject<any, any, any, any, any>
 > extends StructuredTool<
   //@ts-ignore - To handle Zod schema compatibility issues with ToolInputSchemaBase at this generic level
@@ -85,8 +83,7 @@ export abstract class BaseHederaTransactionTool<
   abstract specificInputSchema: S;
 
   get schema(): this['lc_kwargs']['schema'] {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore - Property '_any' is missing...
+    //@ts-ignore
     return this.specificInputSchema.extend({
       metaOptions: HederaTransactionMetaOptionsSchema,
     });
@@ -124,7 +121,6 @@ export abstract class BaseHederaTransactionTool<
         delete (specificCallArgs as any).metaOptions;
       }
 
-      // Handle "current_signer" for adminKey, kycKey, freezeKey, wipeKey, supplyKey, feeScheduleKey, pauseKey
       const keyFieldsToPotentiallySubstitute: (keyof typeof specificCallArgs)[] =
         [
           'adminKey',
@@ -140,22 +136,20 @@ export abstract class BaseHederaTransactionTool<
         if ((specificCallArgs as any)[keyField] === 'current_signer') {
           try {
             const operatorPubKey = await this.hederaKit.signer.getPublicKey();
-            // Using toStringDer() as it's a common serialized format.
             (specificCallArgs as any)[keyField] = operatorPubKey.toStringDer();
             this.logger.info(
               `Substituted ${
                 keyField as string
               } with current signer's public key.`
             );
-          } catch (e: any) {
+          } catch (e: unknown) {
+            const error = e as Error;
             this.logger.error(
               `Failed to get current signer's public key for ${
                 keyField as string
-              } substitution: ${e.message}`,
-              e
+              } substitution: ${error.message}`,
+              error
             );
-            // Decide on error handling: throw, or let it proceed and potentially fail in the builder
-            // For now, we'll let it proceed, and the builder will likely error out if the key is still bad.
           }
         }
       }
@@ -166,8 +160,7 @@ export abstract class BaseHederaTransactionTool<
         );
       }
       if (args?.metaOptions?.nodeAccountIds?.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore - Linter struggles with inferred type of 'id' in map despite explicit annotation
+        //@ts-ignore - Linter struggles with inferred type of 'id' in map despite explicit annotation
         builder.setNodeAccountIds(
           args.metaOptions.nodeAccountIds.map((id: string) =>
             AccountId.fromString(id)
@@ -207,9 +200,10 @@ export abstract class BaseHederaTransactionTool<
           execOptions.scheduleAdminKey = PrivateKey.fromString(
             args.metaOptions.scheduleAdminKey
           ).publicKey;
-        } catch (e) {
+        } catch (e: unknown) {
+          const error = e as Error;
           this.logger.warn(
-            `Could not parse scheduleAdminKey string: ${args.metaOptions.scheduleAdminKey}. Scheduling without admin key.`
+            `Could not parse scheduleAdminKey string: ${args.metaOptions.scheduleAdminKey}. Scheduling without admin key. Error: ${error.message}`
           );
         }
       }
@@ -221,9 +215,11 @@ export abstract class BaseHederaTransactionTool<
         const result = await builder.execute(execOptions);
         return JSON.stringify(result);
       }
-    } catch (error: any) {
-      this.logger.error(`Error in ${this.name}: ${error.message}`, error);
-      return JSON.stringify({ success: false, error: error.message });
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : JSON.stringify(error);
+      this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
+      return JSON.stringify({ success: false, error: errorMessage });
     }
   }
 }

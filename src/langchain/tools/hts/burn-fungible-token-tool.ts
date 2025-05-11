@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { BurnFTParams } from '../../../types';
-import { BigNumber } from 'bignumber.js';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -11,11 +10,11 @@ import { HtsBuilder } from '../../../builders/hts/hts-builder';
 const BurnFTZodSchemaCore = z.object({
   tokenId: z
     .string()
-    .describe('The ID of the fungible token to burn from (e.g., "0.0.xxxx").'),
+    .describe('The ID of the fungible token (e.g., "0.0.xxxx").'),
   amount: z
     .union([z.number(), z.string()])
     .describe(
-      'The amount of tokens to burn (smallest unit). Number or string for large values.'
+      'Amount to burn (smallest unit). Number or string for large values. Builder handles conversion.'
     ),
 });
 
@@ -23,8 +22,7 @@ export class HederaBurnFungibleTokenTool extends BaseHederaTransactionTool<
   typeof BurnFTZodSchemaCore
 > {
   name = 'hedera-hts-burn-fungible-token';
-  description =
-    'Burns fungible tokens. Requires tokenId and amount. Use metaOptions for execution control.';
+  description = 'Burns fungible tokens. Requires tokenId and amount.';
   specificInputSchema = BurnFTZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -39,13 +37,8 @@ export class HederaBurnFungibleTokenTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof BurnFTZodSchemaCore>
   ): Promise<void> {
-    const burnParams: BurnFTParams = {
-      tokenId: specificArgs.tokenId,
-      amount:
-        typeof specificArgs.amount === 'string'
-          ? new BigNumber(specificArgs.amount)
-          : specificArgs.amount,
-    };
-    (builder as HtsBuilder).burnFungibleToken(burnParams);
+    await (builder as HtsBuilder).burnFungibleToken(
+      specificArgs as unknown as BurnFTParams
+    );
   }
 }

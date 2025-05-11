@@ -1,8 +1,5 @@
 import { z } from 'zod';
-import { HederaAgentKit } from '../../../agent';
-import { CreateTopicParams, Key } from '../../../types';
-import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
-import { CustomFixedFee, Hbar, AccountId, TokenId } from '@hashgraph/sdk';
+import { CreateTopicParams } from '../../../types';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -10,27 +7,47 @@ import {
 import { HcsBuilder } from '../../../builders/hcs/hcs-builder';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 
-const CreateTopicZodSchemaCore = z.object({
-  memo: z
+/**
+ * Zod schema for the input structure of a single custom fee object.
+ * This defines the structure the LLM should provide for each custom fee.
+ */
+const CustomFeeObjectSchema = z.object({
+  feeCollectorAccountId: z
+    .string()
+    .describe('The account ID to receive the custom fee.'),
+  denominatingTokenId: z
     .string()
     .optional()
-    .describe('Optional. The publicly visible memo for the topic.'),
+    .describe('The token ID for fee denomination (if not HBAR).'),
+  amount: z
+    .union([z.number(), z.string()])
+    .describe(
+      'The fee amount (smallest unit for tokens, or tinybars for HBAR).'
+    ),
+});
+
+const CreateTopicZodSchemaCore = z.object({
+  memo: z.string().optional().describe('Optional. Memo for the topic.'),
   adminKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Admin key as a hex-encoded private key string or a serialized public key string.'
+      'Optional. Admin key for the topic (e.g., serialized public key string, or private key string for derivation by builder).'
     ),
   submitKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Submit key as a hex-encoded private key string or a serialized public key string.'
+      'Optional. Submit key for the topic (e.g., serialized public key string, or private key string for derivation by builder).'
     ),
   autoRenewPeriod: z
     .number()
+    .int()
+    .positive()
     .optional()
-    .describe('Optional. Auto-renewal period in seconds.'),
+    .describe(
+      'Optional. Auto-renewal period in seconds (e.g., 7776000 for 90 days).'
+    ),
   autoRenewAccountId: z
     .string()
     .optional()
@@ -41,13 +58,13 @@ const CreateTopicZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'Optional. Fee schedule key as a hex-encoded private key string or a serialized public key string.'
+      'Optional. Fee schedule key for the topic (e.g., serialized public key string, or private key string for derivation by builder).'
     ),
   customFees: z
-    .string()
+    .array(CustomFeeObjectSchema)
     .optional()
     .describe(
-      'Optional. Custom fees as a JSON string array of CustomFixedFee-like objects.'
+      'Optional. Array of custom fee objects to be applied to the topic.'
     ),
   exemptAccountIds: z
     .array(z.string())
@@ -55,14 +72,12 @@ const CreateTopicZodSchemaCore = z.object({
     .describe('Optional. Account IDs exempt from custom fees.'),
 });
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore - Zod schema compatibility issue
 export class HederaCreateTopicTool extends BaseHederaTransactionTool<
   typeof CreateTopicZodSchemaCore
 > {
   name = 'hedera-hcs-create-topic';
   description =
-    'Creates a new Hedera Consensus Service (HCS) topic. All parameters are optional. Use metaOptions for execution control.';
+    'Creates a new Hedera Consensus Service (HCS) topic. Provide parameters as needed. The builder handles defaults and key parsing.';
   specificInputSchema = CreateTopicZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -77,47 +92,8 @@ export class HederaCreateTopicTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof CreateTopicZodSchemaCore>
   ): Promise<void> {
-    const topicParams: CreateTopicParams = {};
-    if (specificArgs.memo ) topicParams.memo = specificArgs.memo;
-    if (specificArgs.adminKey )
-      topicParams.adminKey = specificArgs.adminKey;
-    if (specificArgs.submitKey )
-      topicParams.submitKey = specificArgs.submitKey;
-    if (specificArgs.autoRenewPeriod )
-      topicParams.autoRenewPeriod = specificArgs.autoRenewPeriod;
-    if (specificArgs.autoRenewAccountId )
-      topicParams.autoRenewAccountId = specificArgs.autoRenewAccountId;
-    if (specificArgs.feeScheduleKey )
-      topicParams.feeScheduleKey = specificArgs.feeScheduleKey;
-    if (specificArgs.exemptAccountIds )
-      topicParams.exemptAccountIds = specificArgs.exemptAccountIds;
-
-    if (specificArgs.customFees ) {
-      try {
-        const parsedFees = JSON.parse(specificArgs.customFees) as any[];
-        if (Array.isArray(parsedFees)) {
-          topicParams.customFees = parsedFees.map((feeData) => {
-            const fee = new CustomFixedFee().setFeeCollectorAccountId(
-              feeData.feeCollectorAccountId
-            );
-            if (feeData.denominatingTokenId) {
-              fee.setDenominatingTokenId(
-                TokenId.fromString(feeData.denominatingTokenId)
-              );
-              if (feeData.amount ) fee.setAmount(feeData.amount);
-            } else if (feeData.amount ) {
-              fee.setHbarAmount(Hbar.fromTinybars(feeData.amount));
-            }
-            return fee;
-          });
-        }
-      } catch (e) {
-        this.logger.warn(
-          'Failed to parse customFees JSON string for CreateTopic, skipping.',
-          e
-        );
-      }
-    }
-    await (builder as HcsBuilder).createTopic(topicParams);
+    await (builder as HcsBuilder).createTopic(
+      specificArgs as unknown as CreateTopicParams
+    );
   }
 }

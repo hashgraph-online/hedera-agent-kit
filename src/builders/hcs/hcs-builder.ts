@@ -5,14 +5,9 @@ import {
   TopicDeleteTransaction,
   TopicUpdateTransaction,
   TopicId,
-  PrivateKey,
   PublicKey,
-  TransactionReceipt,
-  Transaction,
-  CustomFee,
-  Timestamp,
   AccountId,
-  Key,
+  KeyList,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../../signer/abstract-signer';
@@ -25,17 +20,13 @@ import {
 import { BaseServiceBuilder } from '../base-service-builder';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
-const MAX_SINGLE_MESSAGE_BYTES = 6000;
+const MAX_SINGLE_MESSAGE_BYTES = 1000;
 
 /**
  * HcsBuilder facilitates the construction and execution of Hedera Consensus Service (HCS) transactions.
  * It extends BaseServiceBuilder to provide common transaction execution and byte generation methods.
  */
 export class HcsBuilder extends BaseServiceBuilder {
-  /**
-   * @param {AbstractSigner} signer
-   * @param {Client} basicClient
-   */
   constructor(signer: AbstractSigner, basicClient: Client) {
     super(signer, basicClient);
   }
@@ -52,22 +43,23 @@ export class HcsBuilder extends BaseServiceBuilder {
     }
 
     if (params.adminKey) {
-      if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(
-          PrivateKey.fromString(params.adminKey).publicKey
-        );
-      } else {
-        transaction.setAdminKey(params.adminKey as Key);
+      const parsedAdminKey = await this.parseKey(params.adminKey);
+      if (parsedAdminKey) {
+        transaction.setAdminKey(parsedAdminKey);
+      }
+    }
+
+    if (params.feeScheduleKey) {
+      const parsedFeeScheduleKey = await this.parseKey(params.feeScheduleKey);
+      if (parsedFeeScheduleKey) {
+        transaction.setFeeScheduleKey(parsedFeeScheduleKey);
       }
     }
 
     if (params.submitKey) {
-      if (typeof params.submitKey === 'string') {
-        transaction.setSubmitKey(
-          PrivateKey.fromString(params.submitKey).publicKey
-        );
-      } else {
-        transaction.setSubmitKey(params.submitKey as Key);
+      const parsedSubmitKey = await this.parseKey(params.submitKey);
+      if (parsedSubmitKey) {
+        transaction.setSubmitKey(parsedSubmitKey);
       }
     }
 
@@ -81,15 +73,6 @@ export class HcsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewAccountId(params.autoRenewAccountId);
     }
 
-    if (params.feeScheduleKey) {
-      if (typeof params.feeScheduleKey === 'string') {
-        transaction.setFeeScheduleKey(
-          PrivateKey.fromString(params.feeScheduleKey).publicKey
-        );
-      } else {
-        transaction.setFeeScheduleKey(params.feeScheduleKey as Key);
-      }
-    }
     if (params.customFees && params.customFees.length > 0) {
       transaction.setCustomFees(params.customFees);
     }
@@ -97,7 +80,7 @@ export class HcsBuilder extends BaseServiceBuilder {
     if (params.exemptAccountIds && params.exemptAccountIds.length > 0) {
       if (!this.signer.mirrorNode) {
         this.logger.warn(
-          'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID.'
+          'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for createTopic.'
         );
       } else {
         try {
@@ -109,9 +92,12 @@ export class HcsBuilder extends BaseServiceBuilder {
             publicKeys.push(publicKey);
           }
           if (publicKeys.length > 0) {
-            transaction.setFeeExemptKeys(publicKeys);
+            this.logger.warn(
+              'TopicCreateTransaction does not support setFeeExemptKeys. This parameter will be ignored for topic creation.'
+            );
           }
-        } catch (error: any) {
+        } catch (e: unknown) {
+          const error = e as Error;
           this.logger.error(
             `Failed to process exemptAccountIds for createTopic: ${error.message}`
           );
@@ -147,13 +133,22 @@ export class HcsBuilder extends BaseServiceBuilder {
         : messageContents.length;
 
     if (messageBytesLength > MAX_SINGLE_MESSAGE_BYTES) {
-      console.warn(
+      this.logger.warn(
         `HcsBuilder: Message size (${messageBytesLength} bytes) exceeds recommended single transaction limit (${MAX_SINGLE_MESSAGE_BYTES} bytes). The transaction will likely fail if not accepted by the network.`
       );
     }
-    const transaction = new TopicMessageSubmitTransaction()
+
+    let transaction = new TopicMessageSubmitTransaction()
       .setTopicId(topicId)
       .setMessage(messageContents);
+
+    if (params.maxChunks) {
+      transaction.setMaxChunks(params.maxChunks);
+    }
+
+    if (params.chunkSize) {
+      transaction.setChunkSize(params.chunkSize);
+    }
 
     this.setCurrentTransaction(transaction);
     return this;
@@ -185,27 +180,25 @@ export class HcsBuilder extends BaseServiceBuilder {
     }
     const transaction = new TopicUpdateTransaction().setTopicId(params.topicId);
 
-    if (params.memo) {
-      transaction.setTopicMemo(params.memo);
+    if (Object.prototype.hasOwnProperty.call(params, 'memo')) {
+      transaction.setTopicMemo(params.memo === null ? '' : params.memo!);
     }
 
-    if (params.adminKey) {
-      if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(
-          PrivateKey.fromString(params.adminKey).publicKey
-        );
-      } else {
-        transaction.setAdminKey(params.adminKey as Key);
+    if (Object.prototype.hasOwnProperty.call(params, 'adminKey')) {
+      if (params.adminKey === null) {
+        transaction.setAdminKey(new KeyList());
+      } else if (params.adminKey) {
+        const parsedAdminKey = await this.parseKey(params.adminKey);
+        if (parsedAdminKey) transaction.setAdminKey(parsedAdminKey);
       }
     }
 
-    if (params.submitKey) {
-      if (typeof params.submitKey === 'string') {
-        transaction.setSubmitKey(
-          PrivateKey.fromString(params.submitKey).publicKey
-        );
-      } else {
-        transaction.setSubmitKey(params.submitKey as Key);
+    if (Object.prototype.hasOwnProperty.call(params, 'submitKey')) {
+      if (params.submitKey === null) {
+        transaction.setSubmitKey(new KeyList());
+      } else if (params.submitKey) {
+        const parsedSubmitKey = await this.parseKey(params.submitKey);
+        if (parsedSubmitKey) transaction.setSubmitKey(parsedSubmitKey);
       }
     }
 
@@ -213,28 +206,26 @@ export class HcsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     }
 
-    if (params.autoRenewAccountId) {
-      transaction.setAutoRenewAccountId(
-        params.autoRenewAccountId as string | AccountId
-      );
-    }
-
-    if (params.feeScheduleKey) {
-      if (typeof params.feeScheduleKey === 'string') {
-        transaction.setFeeScheduleKey(
-          PrivateKey.fromString(params.feeScheduleKey).publicKey
+    if (Object.prototype.hasOwnProperty.call(params, 'autoRenewAccountId')) {
+      if (params.autoRenewAccountId === null) {
+        transaction.setAutoRenewAccountId(AccountId.fromString('0.0.0'));
+      } else if (params.autoRenewAccountId) {
+        transaction.setAutoRenewAccountId(
+          params.autoRenewAccountId as string | AccountId
         );
-      } else {
-        transaction.setFeeScheduleKey(params.feeScheduleKey as Key);
       }
     }
 
-    if (params.exemptAccountIds) {
-      if (!this.signer.mirrorNode) {
+    if (Object.prototype.hasOwnProperty.call(params, 'exemptAccountIds')) {
+      if (
+        !this.signer.mirrorNode &&
+        params.exemptAccountIds &&
+        params.exemptAccountIds.length > 0
+      ) {
         this.logger.warn(
-          'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for updateTopic.'
+          'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for updateTopic if account IDs are provided and not empty.'
         );
-      } else {
+      } else if (params.exemptAccountIds) {
         if (params.exemptAccountIds.length === 0) {
           transaction.setFeeExemptKeys([]);
         } else {
@@ -249,7 +240,8 @@ export class HcsBuilder extends BaseServiceBuilder {
             if (publicKeys.length > 0) {
               transaction.setFeeExemptKeys(publicKeys);
             }
-          } catch (error: any) {
+          } catch (e: unknown) {
+            const error = e as Error;
             this.logger.error(
               `Failed to process exemptAccountIds for updateTopic: ${error.message}`
             );

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { ApproveFungibleTokenAllowanceParams } from '../../../types';
-import { BigNumber } from 'bignumber.js';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -13,7 +12,7 @@ const ApproveFungibleTokenAllowanceZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'The token owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
+      'Optional. The token owner account ID (e.g., "0.0.xxxx"). Defaults to operator.'
     ),
   spenderAccountId: z
     .string()
@@ -22,8 +21,9 @@ const ApproveFungibleTokenAllowanceZodSchemaCore = z.object({
   amount: z
     .union([z.number(), z.string()])
     .describe(
-      'The maximum amount of the token (smallest unit) the spender can use. Number or string for large values.'
+      'Max token amount (smallest unit) spender can use. Builder handles conversion.'
     ),
+  memo: z.string().optional().describe('Optional. Memo for the transaction.'),
 });
 
 export class HederaApproveFungibleTokenAllowanceTool extends BaseHederaTransactionTool<
@@ -31,7 +31,7 @@ export class HederaApproveFungibleTokenAllowanceTool extends BaseHederaTransacti
 > {
   name = 'hedera-account-approve-fungible-token-allowance';
   description =
-    'Approves a fungible token allowance for a spender. Requires spenderAccountId, tokenId, and amount. ownerAccountId defaults to operator. Use metaOptions for execution control.';
+    'Approves a fungible token allowance for a spender. Builder handles amount conversion.';
   specificInputSchema = ApproveFungibleTokenAllowanceZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -46,17 +46,8 @@ export class HederaApproveFungibleTokenAllowanceTool extends BaseHederaTransacti
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof ApproveFungibleTokenAllowanceZodSchemaCore>
   ): Promise<void> {
-    const allowanceParams: ApproveFungibleTokenAllowanceParams = {
-      spenderAccountId: specificArgs.spenderAccountId,
-      tokenId: specificArgs.tokenId,
-      amount:
-        typeof specificArgs.amount === 'string'
-          ? new BigNumber(specificArgs.amount)
-          : specificArgs.amount,
-    };
-    if (specificArgs.ownerAccountId ) {
-      allowanceParams.ownerAccountId = specificArgs.ownerAccountId;
-    }
-    (builder as AccountBuilder).approveFungibleTokenAllowance(allowanceParams);
+    await (builder as AccountBuilder).approveFungibleTokenAllowance(
+      specificArgs as unknown as ApproveFungibleTokenAllowanceParams
+    );
   }
 }

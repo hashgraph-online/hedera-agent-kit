@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { ApproveHbarAllowanceParams } from '../../../types';
-import { Hbar } from '@hashgraph/sdk';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -13,7 +12,7 @@ const ApproveHbarAllowanceZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'The HBAR owner account ID (e.g., "0.0.xxxx"). Defaults to operator if not provided.'
+      'Optional. The HBAR owner account ID (e.g., "0.0.xxxx"). Defaults to operator if not provided.'
     ),
   spenderAccountId: z
     .string()
@@ -21,10 +20,11 @@ const ApproveHbarAllowanceZodSchemaCore = z.object({
       'The spender account ID being granted the allowance (e.g., "0.0.yyyy").'
     ),
   amount: z
-    .number()
+    .union([z.number(), z.string()])
     .describe(
-      'The maximum HBAR amount (in HBAR, not tinybars) that the spender can use.'
+      'Max HBAR amount spender can use (in HBARs). Builder handles Hbar object creation.'
     ),
+  memo: z.string().optional().describe('Optional. Memo for the transaction.'),
 });
 
 export class HederaApproveHbarAllowanceTool extends BaseHederaTransactionTool<
@@ -32,7 +32,7 @@ export class HederaApproveHbarAllowanceTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-account-approve-hbar-allowance';
   description =
-    'Approves an HBAR allowance for a spender. Requires spenderAccountId and amount (in HBAR). ownerAccountId defaults to operator. Use metaOptions for execution control.';
+    'Approves an HBAR allowance for a spender. Builder handles Hbar unit conversion.';
   specificInputSchema = ApproveHbarAllowanceZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -47,14 +47,8 @@ export class HederaApproveHbarAllowanceTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof ApproveHbarAllowanceZodSchemaCore>
   ): Promise<void> {
-    const allowanceParams: ApproveHbarAllowanceParams = {
-      spenderAccountId: specificArgs.spenderAccountId,
-      amount: new Hbar(specificArgs.amount), // amount is in HBAR
-    };
-    if (specificArgs.ownerAccountId ) {
-      allowanceParams.ownerAccountId = specificArgs.ownerAccountId;
-    }
-    // The metaOptions.transactionMemo will be handled by the base class for the transaction memo
-    (builder as AccountBuilder).approveHbarAllowance(allowanceParams);
+    await (builder as AccountBuilder).approveHbarAllowance(
+      specificArgs as unknown as ApproveHbarAllowanceParams
+    );
   }
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ClaimAirdropParams } from '../../../types';
-import { AccountId, TokenId, Long, PendingAirdropId } from '@hashgraph/sdk';
+import { AccountId, TokenId, Long, PendingAirdropId, NftId } from '@hashgraph/sdk';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -50,6 +50,44 @@ export class HederaClaimAirdropTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof ClaimAirdropZodSchemaCore>
   ): Promise<void> {
-    //TODO: Implement
+    const sdkPendingAirdropIds: PendingAirdropId[] =
+      specificArgs.pendingAirdrops.map((item, index: number) => {
+        const itemNumber = index + 1;
+
+        let serialValue: Long;
+        if (typeof item.serialNumber === 'string') {
+          try {
+            serialValue = Long.fromString(item.serialNumber);
+          } catch (e: unknown) {
+            const error = e as Error;
+            throw new Error(
+              `Pending airdrop item #${itemNumber} serialNumber string ('${item.serialNumber}') is not a valid Long: ${error.message}`
+            );
+          }
+        } else {
+          serialValue = Long.fromNumber(item.serialNumber);
+        }
+
+        try {
+          const senderId = AccountId.fromString(item.senderAccountId);
+          const tokId = TokenId.fromString(item.tokenId);
+          return new PendingAirdropId({
+            senderId,
+            tokenId: tokId,
+            nftId: NftId.fromString(serialValue.toString()),
+          });
+        } catch (e: unknown) {
+          const error = e as Error;
+          throw new Error(
+            `Error constructing PendingAirdropId for item #${itemNumber} (sender: ${item.senderAccountId}, token: ${item.tokenId}, serial: ${item.serialNumber}): ${error.message}`
+          );
+        }
+      });
+
+    const claimParams: ClaimAirdropParams = {
+      pendingAirdropIds: sdkPendingAirdropIds,
+    };
+
+    (builder as HtsBuilder).claimAirdrop(claimParams);
   }
 }

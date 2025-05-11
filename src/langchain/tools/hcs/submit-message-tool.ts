@@ -8,15 +8,33 @@ import { HcsBuilder } from '../../../builders/hcs/hcs-builder';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 
 const SubmitMessageZodSchemaCore = z.object({
-  topicId: z
-    .string()
-    .describe(
-      'The ID of the topic to submit the message to (e.g., "0.0.xxxx").'
-    ),
+  topicId: z.string().describe('The ID of the topic (e.g., "0.0.xxxx").'),
   message: z
     .string()
     .describe(
-      'The message content. For binary, provide as base64 string; tool will decode.'
+      'The message content. For binary data, provide as a base64 encoded string; the builder handles decoding.'
+    ),
+  maxChunks: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Optional. Maximum number of chunks for messages exceeding single transaction limits. Builder handles chunking.'
+    ),
+  chunkSize: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Optional. Size of each chunk in bytes if chunking is performed. Builder applies default if needed.'
+    ),
+  submitKey: z
+    .string()
+    .optional()
+    .describe(
+      'Optional. Submit key if required by the topic and different from the operator (e.g., serialized public key string, or private key string for derivation by builder).'
     ),
 });
 
@@ -25,7 +43,7 @@ export class HederaSubmitMessageTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-hcs-submit-message';
   description =
-    'Submits a message to a Hedera Consensus Service (HCS) topic. Provide topicId and message. Use metaOptions for execution control.';
+    'Submits a message to a Hedera Consensus Service (HCS) topic. The builder handles chunking and base64 decoding for binary messages.';
   specificInputSchema = SubmitMessageZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -40,12 +58,8 @@ export class HederaSubmitMessageTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof SubmitMessageZodSchemaCore>
   ): Promise<void> {
-    let messageContent: string | Uint8Array = specificArgs.message;
-
-    const submitParams: SubmitMessageParams = {
-      topicId: specificArgs.topicId,
-      message: messageContent,
-    };
-    (builder as HcsBuilder).submitMessageToTopic(submitParams);
+    await (builder as HcsBuilder).submitMessageToTopic(
+      specificArgs as unknown as SubmitMessageParams
+    );
   }
 }

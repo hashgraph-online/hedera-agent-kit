@@ -4,20 +4,20 @@
   "type": "module",
   "main": "./dist/node/index.cjs",
   "module": "./dist/node/index.mjs",
-  "browser": {
-    "./dist/browser/hedera-agent-kit.umd.js": "./dist/browser/hedera-agent-kit.umd.js",
-    "./dist/browser/hedera-agent-kit.es.js": "./dist/browser/hedera-agent-kit.es.js"
-  },
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
+      "browser": {
+        "import": "./dist/browser/hedera-agent-kit.es.js",
+        "require": "./dist/browser/hedera-agent-kit.umd.js"
+      },
+      "node": {
+        "import": "./dist/node/index.mjs",
+        "require": "./dist/node/index.cjs"
+      },
       "import": "./dist/node/index.mjs",
-      "require": "./dist/node/index.cjs",
-      "browser": [
-        "./dist/browser/hedera-agent-kit.es.js",
-        "./dist/browser/hedera-agent-kit.umd.js"
-      ],
-      "types": "./dist/types/index.d.ts"
+      "require": "./dist/node/index.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -28,9 +28,9 @@
     "README.md"
   ],
   "scripts": {
-    "demo:langchain": "tsx tests/index.ts",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest tests/integration/hts.integration.test.ts",
+    "demo:langchain": "tsx examples/langchain-demo.ts",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
     "prepare": "npm run build",
     "build": "npm run clean && npm run build:node && npm run build:browser",
     "build:node": "vite build --mode node",
@@ -54,13 +54,10 @@
     "typescript": "^5.7.2",
     "vite": "^6.3.5",
     "vite-plugin-dts": "^3.9.1",
-    "jest": "^29.7.0",
-    "@types/jest": "^29.5.12",
-    "@swc/core": "^1.7.0",
-    "@swc/jest": "^0.2.36"
+    "vitest": "^3.0.7"
   },
   "dependencies": {
-    "@hashgraph/sdk": "^2.63.0",
+    "@hashgraph/sdk": "^2.62.0",
     "@hashgraphonline/hashinal-wc": "^1.0.96",
     "@hashgraphonline/standards-agent-kit": "0.0.22",
     "@hashgraphonline/standards-sdk": "^0.0.97",

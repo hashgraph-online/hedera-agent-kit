@@ -33,21 +33,8 @@ export class HederaGetFileContentsTool extends Tool {
   description =
     'Retrieves the contents of a file from the Hedera File Service. Requires fileId. Returns contents as base64 string by default, or utf8.';
 
-  // For direct Tool extension, schema is defined differently or input is just a string.
-  // To use Zod with direct Tool extension, we'd parse in _call.
-  // Let's make it expect a JSON string input for structured args for now.
-  // Or, make input just the fileId string, and handle encoding via a fixed property or a more complex input structure if truly needed.
-  // For simplicity for an LLM, let's make the primary input the fileId, and encoding an option.
-  // StructuredTool is better for multiple inputs, but direct Tool can work with stringified JSON or single string.
-
-  // Let's stick to the single string input for Tool, and user can specify encoding in the string if needed,
-  // or we make the tool always return base64.
-  // For better UX with options, we should ideally use StructuredTool.
-  // Given the blocker with StructuredTool, let's use a simple string input for fileId and default to base64.
-  // If we want options, the input can be a JSON string: "{\"fileId\": \"0.0.xxx\", \"outputEncoding\": \"utf8\"}"
-
   constructor({ hederaKit, logger, ...rest }: HederaGetFileContentsToolParams) {
-    super(rest); // Pass ...rest for ToolParams like callbacks, verbose, etc.
+    super(rest);
     this.hederaKit = hederaKit;
     this.logger = logger || hederaKit.logger;
   }
@@ -58,23 +45,22 @@ export class HederaGetFileContentsTool extends Tool {
     let args: z.infer<typeof GetFileContentsZodSchema>;
     try {
       if (typeof input === 'string') {
-        // Attempt to parse if it's JSON, otherwise assume it's just the fileId
         try {
           args = GetFileContentsZodSchema.parse(JSON.parse(input));
-        } catch (e) {
-          // Assume input is just fileId if JSON parse fails or if it's not an object after parsing
-          args = GetFileContentsZodSchema.parse({
-            fileId: input,
-            outputEncoding: 'base64',
-          });
+        } catch (e: unknown) {
+          const error = e as Error;
+          throw new Error(
+            `Error parsing input: ${error.message}. Expected JSON string with fileId and optional outputEncoding.`
+          );
         }
       } else {
         args = GetFileContentsZodSchema.parse(input);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const error = e as Error;
       return JSON.stringify({
         success: false,
-        error: `Invalid input: ${e.message}`,
+        error: `Invalid input: ${error.message}`,
       });
     }
 
@@ -83,8 +69,6 @@ export class HederaGetFileContentsTool extends Tool {
       const fileId = FileId.fromString(args.fileId);
       const query = new FileContentsQuery().setFileId(fileId);
 
-      // FileContentsQuery can be expensive, so it requires payment.
-      // The client used must have an operator and balance.
       const contentsBytes: Uint8Array = await query.execute(
         this.hederaKit.client
       );
@@ -93,7 +77,6 @@ export class HederaGetFileContentsTool extends Tool {
       if (args.outputEncoding === 'utf8') {
         outputContents = Buffer.from(contentsBytes).toString('utf8');
       } else {
-        // base64
         outputContents = Buffer.from(contentsBytes).toString('base64');
       }
       return JSON.stringify({
@@ -102,14 +85,16 @@ export class HederaGetFileContentsTool extends Tool {
         encoding: args.outputEncoding,
         contents: outputContents,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(
-        `Error in ${this.name} for file ${args.fileId}: ${error.message}`,
+        `Error in ${this.name} for file ${args.fileId}: ${errorMessage}`,
         error
       );
       return JSON.stringify({
         success: false,
-        error: error.message,
+        error: errorMessage,
         fileId: args.fileId,
       });
     }

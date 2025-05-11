@@ -1,8 +1,5 @@
 import { z } from 'zod';
 import { CreateContractParams } from '../../../types';
-import { Long } from '@hashgraph/sdk';
-import { BigNumber } from 'bignumber.js';
-import { Buffer } from 'buffer';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -15,67 +12,74 @@ const CreateContractZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'The ID of the file containing the contract bytecode. Use this OR bytecodeHex.'
+      'Optional. File ID of contract bytecode. Used if bytecodeHex not set. Builder validates choice.'
     ),
   bytecodeHex: z
     .string()
     .optional()
     .describe(
-      'The contract bytecode as a hex-encoded string. Use this OR bytecodeFileId.'
+      'Optional. Contract bytecode as hex string. Used if bytecodeFileId not set. Builder validates choice & decodes.'
     ),
   adminKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Admin key as a hex-encoded private key string or a serialized public key string.'
+      'Optional. Admin key (serialized string). Builder handles parsing.'
     ),
   gas: z
     .union([z.number(), z.string()])
     .describe(
-      'Gas to deploy the contract (number or string for large values).'
+      'Gas to deploy (number or string). Builder handles Long conversion.'
     ),
   initialBalance: z
     .union([z.number(), z.string()])
     .optional()
-    .describe(
-      'Optional. Initial balance in HBAR (e.g., 10) or tinybars as string (e.g., "1000000000") to send to the contract (for payable constructor).'
-    ),
+    .describe('Optional. Initial balance in HBAR. Builder handles conversion.'),
   constructorParametersHex: z
     .string()
     .optional()
-    .describe('Optional. Constructor parameters as a hex-encoded string.'),
-  // memo is in metaOptions
+    .describe(
+      'Optional. Constructor parameters as hex string. Builder decodes.'
+    ),
+  memo: z
+    .string()
+    .optional()
+    .describe('Optional. Memo for the contract creation transaction.'),
   autoRenewPeriod: z
     .number()
     .int()
+    .positive()
     .optional()
     .describe('Optional. Auto-renewal period in seconds.'),
   stakedAccountId: z
     .string()
     .optional()
-    .describe('Optional. Account ID to stake to.'),
+    .describe('Optional. Account ID to stake to (e.g., "0.0.xxxx").'),
   stakedNodeId: z
     .number()
     .int()
     .optional()
-    .describe('Optional. Node ID to stake to.'),
+    .describe(
+      'Optional. Node ID to stake to. Builder handles Long conversion.'
+    ),
   declineStakingReward: z
     .boolean()
     .optional()
-    .describe('Optional. If true, decline staking rewards.'),
+    .describe('Optional. If true, contract declines staking rewards.'),
   maxAutomaticTokenAssociations: z
     .number()
     .int()
     .optional()
     .describe('Optional. Max automatic token associations for the contract.'),
 });
+// Validation for bytecodeFileId vs bytecodeHex is builder's responsibility.
 
 export class HederaCreateContractTool extends BaseHederaTransactionTool<
   typeof CreateContractZodSchemaCore
 > {
   name = 'hedera-scs-create-contract';
   description =
-    'Creates/deploys a new Hedera smart contract. Provide bytecode (as hex string or file ID) and gas. Other params optional. Use metaOptions for execution control.';
+    'Creates/deploys a new Hedera smart contract. Builder handles parsing, conversions, and validation of inputs (e.g., bytecode source).';
   specificInputSchema = CreateContractZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -90,63 +94,8 @@ export class HederaCreateContractTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof CreateContractZodSchemaCore>
   ): Promise<void> {
-    if (!specificArgs.bytecodeFileId && !specificArgs.bytecodeHex) {
-      throw new Error('Either bytecodeFileId or bytecodeHex must be provided.');
-    }
-    if (specificArgs.bytecodeFileId && specificArgs.bytecodeHex) {
-      throw new Error(
-        'Cannot provide both bytecodeFileId and bytecodeHex. Choose one.'
-      );
-    }
-
-    const contractParams: CreateContractParams = {
-      gas:
-        typeof specificArgs.gas === 'string'
-          ? Long.fromString(specificArgs.gas)
-          : Long.fromNumber(specificArgs.gas),
-    };
-
-    if (specificArgs.bytecodeFileId) {
-      contractParams.bytecodeFileId = specificArgs.bytecodeFileId;
-    } else if (specificArgs.bytecodeHex) {
-      try {
-        contractParams.bytecode = Buffer.from(specificArgs.bytecodeHex, 'hex');
-      } catch (e) {
-        this.logger.error('Failed to decode bytecodeHex', e);
-        throw new Error('Invalid bytecodeHex string.');
-      }
-    }
-
-    if (specificArgs.adminKey) contractParams.adminKey = specificArgs.adminKey;
-    if (specificArgs.initialBalance) {
-      contractParams.initialBalance =
-        typeof specificArgs.initialBalance === 'string'
-          ? new BigNumber(specificArgs.initialBalance) // Assume string might be tinybar for BigNumber Hbar conversion
-          : specificArgs.initialBalance; // Number assumed to be HBAR for BigNumber Hbar conversion
-    }
-    if (specificArgs.constructorParametersHex) {
-      try {
-        contractParams.constructorParameters = Buffer.from(
-          specificArgs.constructorParametersHex,
-          'hex'
-        );
-      } catch (e) {
-        this.logger.error('Failed to decode constructorParametersHex', e);
-        throw new Error('Invalid constructorParametersHex string.');
-      }
-    }
-    if (specificArgs.autoRenewPeriod)
-      contractParams.autoRenewPeriod = specificArgs.autoRenewPeriod;
-    if (specificArgs.stakedAccountId)
-      contractParams.stakedAccountId = specificArgs.stakedAccountId;
-    if (specificArgs.stakedNodeId)
-      contractParams.stakedNodeId = Long.fromNumber(specificArgs.stakedNodeId);
-    if (specificArgs.declineStakingReward)
-      contractParams.declineStakingReward = specificArgs.declineStakingReward;
-    if (specificArgs.maxAutomaticTokenAssociations)
-      contractParams.maxAutomaticTokenAssociations =
-        specificArgs.maxAutomaticTokenAssociations;
-
-    (builder as ScsBuilder).createContract(contractParams);
+    await (builder as ScsBuilder).createContract(
+      specificArgs as unknown as CreateContractParams
+    );
   }
 }

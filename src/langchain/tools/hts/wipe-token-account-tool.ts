@@ -1,7 +1,5 @@
 import { z } from 'zod';
 import { WipeTokenAccountParams } from '../../../types';
-import { Long } from '@hashgraph/sdk';
-import { BigNumber } from 'bignumber.js';
 import {
   BaseHederaTransactionTool,
   BaseHederaTransactionToolParams,
@@ -22,13 +20,13 @@ const WipeTokenAccountZodSchemaCore = z.object({
     .union([z.number(), z.string()])
     .optional()
     .describe(
-      'For Fungible Tokens: the amount to wipe (smallest unit). Number or string for large values.'
+      'For Fungible Tokens: amount to wipe (smallest unit). Builder handles conversion and validation.'
     ),
   serials: z
-    .array(z.union([z.number(), z.string()]))
+    .array(z.union([z.number().int().positive(), z.string()]))
     .optional()
     .describe(
-      'For Non-Fungible Tokens: an array of serial numbers (number or string) to wipe.'
+      'For Non-Fungible Tokens: array of serial numbers to wipe. Builder handles conversion and validation.'
     ),
 });
 
@@ -37,7 +35,7 @@ export class HederaWipeTokenAccountTool extends BaseHederaTransactionTool<
 > {
   name = 'hedera-hts-wipe-token-account';
   description =
-    "Wipes tokens (fungible or non-fungible) from an account. Requires tokenId and accountId. Provide 'amount' for FTs or 'serials' for NFTs. Use metaOptions for execution control.";
+    "Wipes tokens (fungible or non-fungible) from an account. Provide 'amount' for FTs or 'serials' for NFTs. Builder validates inputs.";
   specificInputSchema = WipeTokenAccountZodSchemaCore;
 
   constructor(params: BaseHederaTransactionToolParams) {
@@ -52,31 +50,8 @@ export class HederaWipeTokenAccountTool extends BaseHederaTransactionTool<
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof WipeTokenAccountZodSchemaCore>
   ): Promise<void> {
-    const wipeParams: WipeTokenAccountParams = {
-      tokenId: specificArgs.tokenId,
-      accountId: specificArgs.accountId,
-    };
-
-    if (specificArgs.amount) {
-      wipeParams.amount =
-        typeof specificArgs.amount === 'string'
-          ? new BigNumber(specificArgs.amount)
-          : specificArgs.amount;
-    }
-    if (specificArgs.serials && specificArgs.serials.length > 0) {
-      wipeParams.serials = specificArgs.serials as Array<
-        number | Long | BigNumber
-      >;
-    }
-
-    if (
-      wipeParams.amount === undefined &&
-      (wipeParams.serials === undefined || wipeParams.serials.length === 0)
-    ) {
-      throw new Error(
-        'Either amount (for FT) or serials (for NFT) must be provided for wiping tokens.'
-      );
-    }
-    (builder as HtsBuilder).wipeTokenAccount(wipeParams);
+    await (builder as HtsBuilder).wipeTokenAccount(
+      specificArgs as unknown as WipeTokenAccountParams
+    );
   }
 }
