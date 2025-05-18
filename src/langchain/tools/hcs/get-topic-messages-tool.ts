@@ -1,5 +1,5 @@
 import { Tool } from '@langchain/core/tools';
-import HederaAgentKit from '../../../agent';
+import HederaAgentKit from '../../../agent/agent';
 import { TopicId } from '@hashgraph/sdk';
 
 export class HederaGetTopicMessagesTool extends Tool {

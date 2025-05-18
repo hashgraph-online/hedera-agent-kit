@@ -18,5 +18,4 @@ export function parseKey(keyString: string): Key | null {
       return null;
     }
   }
-} 
- 
+}

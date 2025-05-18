@@ -2,12 +2,12 @@ import {
   AccountId,
   Client,
   PrivateKey,
-  PublicKey,
   Transaction,
   TransactionResponse,
   TransactionReceipt,
 } from '@hashgraph/sdk';
-import { AbstractSigner, HederaNetworkType } from './abstract-signer';
+import { AbstractSigner } from './abstract-signer';
+import { HederaNetworkType } from '../types';
 
 /**
  * A signer implementation for server-side environments that uses a private key for signing.
@@ -40,9 +40,8 @@ export class ServerSigner extends AbstractSigner {
     } else if (network === 'testnet') {
       this.client = Client.forTestnet();
     } else {
-      const exhaustiveCheck: never = network;
       throw new Error(
-        `Unsupported Hedera network type specified: ${exhaustiveCheck}. Only 'mainnet' or 'testnet' are supported.`
+        `Unsupported Hedera network type specified: ${network}. Only 'mainnet' or 'testnet' are supported.`
       );
     }
     this.client.setOperator(this.accountIdInternal, this.privateKey);

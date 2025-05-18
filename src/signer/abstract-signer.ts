@@ -11,12 +11,7 @@ import {
   Logger as StandardsSdkLogger,
   NetworkType as StandardsSdkNetworkType,
 } from '@hashgraphonline/standards-sdk';
-
-/**
- * Represents the type of Hedera network.
- * Can be 'mainnet' or 'testnet'.
- */
-export type HederaNetworkType = 'mainnet' | 'testnet';
+import { HederaNetworkType } from '../types';
 
 /**
  * AbstractSigner provides a common interface and shared functionality for different signing mechanisms.

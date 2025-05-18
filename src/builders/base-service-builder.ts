@@ -14,7 +14,7 @@ import {
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../signer/abstract-signer';
 import { Logger } from '@hashgraphonline/standards-sdk';
-import type { HederaAgentKit } from '../agent';
+import type { HederaAgentKit } from '../agent/agent';
 
 /**
  * Defines the structure for the result of an execute operation.
@@ -65,7 +65,9 @@ export abstract class BaseServiceBuilder {
    * @param {boolean} isUserInitiated Whether this is a user-initiated transfer
    * @returns {AccountId} The account that should be used as the sender
    */
-  protected getTransferSourceAccount(isUserInitiated: boolean = true): AccountId {
+  protected getTransferSourceAccount(
+    isUserInitiated: boolean = true
+  ): AccountId {
     if (isUserInitiated && this.kit.userAccountId) {
       return AccountId.fromString(this.kit.userAccountId);
     }
@@ -191,8 +193,12 @@ export abstract class BaseServiceBuilder {
 
       return result;
     } catch (e: unknown) {
+      console.log('error is:', e);
       const error = e as Error;
-      this.logger.error(`Transaction execution failed: ${error.message}`);
+      this.logger.error(
+        `Transaction execution failed: ${error.message}`,
+        error
+      );
       const errorResult: ExecuteResult = {
         success: false,
         error:

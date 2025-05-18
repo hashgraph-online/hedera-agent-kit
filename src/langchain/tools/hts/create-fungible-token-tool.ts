@@ -65,9 +65,13 @@ const CustomFeeInputUnionSchema = z.discriminatedUnion('type', [
 
 const FTCreateZodSchemaCore = z.object({
   tokenName: z.string().describe('The publicly visible name of the token.'),
-  tokenSymbol: z.string().describe('The publicly visible symbol of the token.'),
+  tokenSymbol: z
+    .string()
+    .optional()
+    .describe('The publicly visible symbol of the token.'),
   treasuryAccountId: z
     .string()
+    .optional()
     .describe('Treasury account ID (e.g., "0.0.xxxx").'),
   initialSupply: z
     .union([z.number(), z.string()])
@@ -75,7 +79,11 @@ const FTCreateZodSchemaCore = z.object({
   decimals: z
     .number()
     .int()
-    .describe('Number of decimal places for the token.'),
+    .optional()
+    .default(0)
+    .describe(
+      'Number of decimal places for the token. Defaults to 0 if not specified.'
+    ),
   adminKey: z
     .string()
     .optional()
@@ -142,10 +150,15 @@ const FTCreateZodSchemaCore = z.object({
       SDKTokenSupplyType.Finite.toString(),
       SDKTokenSupplyType.Infinite.toString(),
     ])
-    .describe('Supply type: FINITE or INFINITE.'),
+    .optional()
+    .default(SDKTokenSupplyType.Finite.toString())
+    .describe(
+      'Supply type: FINITE or INFINITE. Defaults to FINITE if not specified.'
+    ),
   maxSupply: z
     .union([z.number(), z.string()])
     .optional()
+    .default(1000000000000000)
     .describe(
       'Max supply if supplyType is FINITE. Builder validates against initialSupply.'
     ),

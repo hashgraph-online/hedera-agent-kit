@@ -1,5 +1,5 @@
 import { Tool } from '@langchain/core/tools';
-import HederaAgentKit from '../../../agent';
+import HederaAgentKit from '../../../agent/agent';
 import { toBaseUnit } from '../../../utils/hts-format-utils';
 import { fromBaseToDisplayUnit } from '../../../utils/format-units';
 

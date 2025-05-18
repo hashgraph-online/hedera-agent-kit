@@ -62,7 +62,7 @@ import {
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
 import { Buffer } from 'buffer';
-import { HederaAgentKit } from '../../agent';
+import { HederaAgentKit } from '../../agent/agent';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
@@ -81,14 +81,20 @@ export class HtsBuilder extends BaseServiceBuilder {
    */
   public async createFungibleToken(params: FTCreateParams): Promise<this> {
     let treasuryAccId = params.treasuryAccountId;
-    if (!treasuryAccId && this.kit.userAccountId && 
-        this.kit.operationalMode === 'provideBytes' && 
-        this.kit.scheduleUserTransactionsInBytesMode) {
-        this.logger.info(`[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for scheduled FT creation.`);
-        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+    if (
+      !treasuryAccId &&
+      this.kit.userAccountId &&
+      this.kit.operationalMode === 'provideBytes'
+    ) {
+      this.logger.info(
+        `[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for FT creation in provideBytes mode.`
+      );
+      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
     }
     if (!treasuryAccId) {
-        throw new Error('[HtsBuilder.createFungibleToken] Treasury Account ID is required, either explicitly or via configured userAccountId for scheduled operations.');
+      throw new Error(
+        '[HtsBuilder.createFungibleToken] Treasury Account ID is required (e.g., explicitly, via userAccountId for provideBytes mode, or via agent operator for directExecution if applicable).'
+      );
     }
 
     const transaction = new TokenCreateTransaction()
@@ -157,14 +163,20 @@ export class HtsBuilder extends BaseServiceBuilder {
    */
   public async createNonFungibleToken(params: NFTCreateParams): Promise<this> {
     let treasuryAccId = params.treasuryAccountId;
-    if (!treasuryAccId && this.kit.userAccountId && 
-        this.kit.operationalMode === 'provideBytes' && 
-        this.kit.scheduleUserTransactionsInBytesMode) {
-        this.logger.info(`[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for scheduled NFT creation.`);
-        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+    if (
+      !treasuryAccId &&
+      this.kit.userAccountId &&
+      this.kit.operationalMode === 'provideBytes'
+    ) {
+      this.logger.info(
+        `[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for NFT creation in provideBytes mode.`
+      );
+      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
     }
     if (!treasuryAccId) {
-        throw new Error('[HtsBuilder.createNonFungibleToken] Treasury Account ID is required, either explicitly or via configured userAccountId for scheduled operations.');
+      throw new Error(
+        '[HtsBuilder.createNonFungibleToken] Treasury Account ID is required (e.g., explicitly, via userAccountId for provideBytes mode, or via agent operator for directExecution if applicable).'
+      );
     }
 
     const transaction = new TokenCreateTransaction()
@@ -407,9 +419,7 @@ export class HtsBuilder extends BaseServiceBuilder {
 
     if (params.hbarTransfers && params.hbarTransfers.length > 0) {
       for (const hbarInput of params.hbarTransfers) {
-        const sdkHbarAmount = Hbar.fromTinybars(
-          hbarInput.amount as unknown as string | number
-        );
+        const sdkHbarAmount = Hbar.fromString(hbarInput.amount.toString());
         transaction.addHbarTransfer(
           typeof hbarInput.accountId === 'string'
             ? AccountId.fromString(hbarInput.accountId)

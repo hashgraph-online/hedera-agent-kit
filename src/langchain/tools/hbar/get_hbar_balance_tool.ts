@@ -1,5 +1,5 @@
 import { Tool } from '@langchain/core/tools';
-import HederaAgentKit from '../../../agent';
+import HederaAgentKit from '../../../agent/agent';
 
 export class HederaGetBalanceTool extends Tool {
   name = 'hedera_get_hbar_balance';

@@ -32,7 +32,7 @@ import {
   SignScheduledTransactionParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
-import { HederaAgentKit } from '../../agent';
+import { HederaAgentKit } from '../../agent/agent';
 
 const DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
@@ -192,44 +192,57 @@ export class AccountBuilder extends BaseServiceBuilder {
    * @returns {this} The builder instance for chaining.
    * @throws {Error} If transfers are missing or do not sum to zero.
    */
-  public transferHbar(params: HbarTransferParams, isUserInitiated: boolean = true): this {
+  public transferHbar(
+    params: HbarTransferParams,
+    isUserInitiated: boolean = true
+  ): this {
     const transaction = new TransferTransaction();
     if (!params.transfers || params.transfers.length === 0) {
       throw new Error('HbarTransferParams must include at least one transfer.');
     }
-    
+
     let netZeroInTinybars = new BigNumber(0);
     let userTransferProcessedForScheduling = false;
 
-    if (isUserInitiated && 
-        this.kit.userAccountId && 
-        this.kit.operationalMode === 'provideBytes' && 
-        this.kit.scheduleUserTransactionsInBytesMode && 
-        params.transfers.length === 1) {
-          
+    if (
+      isUserInitiated &&
+      this.kit.userAccountId &&
+      this.kit.operationalMode === 'provideBytes' &&
+      params.transfers.length === 1
+    ) {
       const receiverTransfer = params.transfers[0];
-      const amountValue = typeof receiverTransfer.amount === 'string' || typeof receiverTransfer.amount === 'number' 
-        ? receiverTransfer.amount 
-        : receiverTransfer.amount.toString();
-      
+      const amountValue =
+        typeof receiverTransfer.amount === 'string' ||
+        typeof receiverTransfer.amount === 'number'
+          ? receiverTransfer.amount
+          : receiverTransfer.amount.toString();
+
       const amountBigNum = new BigNumber(amountValue);
 
       if (amountBigNum.isPositive()) {
-        const recipientAccountId = typeof receiverTransfer.accountId === 'string'
-          ? AccountId.fromString(receiverTransfer.accountId)
-          : receiverTransfer.accountId;
-        
-        const sdkHbarAmount = Hbar.fromTinybars(amountValue);
-        
-        this.logger.info(`[AccountBuilder.transferHbar] Configuring user-initiated scheduled transfer: ${sdkHbarAmount.toString()} from ${this.kit.userAccountId} to ${recipientAccountId.toString()}`);
+        const recipientAccountId =
+          typeof receiverTransfer.accountId === 'string'
+            ? AccountId.fromString(receiverTransfer.accountId)
+            : receiverTransfer.accountId;
+
+        const sdkHbarAmount = Hbar.fromString(amountValue.toString());
+
+        this.logger.info(
+          `[AccountBuilder.transferHbar] Configuring user-initiated scheduled transfer: ${sdkHbarAmount.toString()} from ${
+            this.kit.userAccountId
+          } to ${recipientAccountId.toString()}`
+        );
 
         transaction.addHbarTransfer(recipientAccountId, sdkHbarAmount);
-        transaction.addHbarTransfer(AccountId.fromString(this.kit.userAccountId), sdkHbarAmount.negated());
-        
-        userTransferProcessedForScheduling = true; 
+        transaction.addHbarTransfer(
+          AccountId.fromString(this.kit.userAccountId),
+          sdkHbarAmount.negated()
+        );
+
+        userTransferProcessedForScheduling = true;
       }
     }
-    
+
     if (!userTransferProcessedForScheduling) {
       for (const transferInput of params.transfers) {
         const accountId =
@@ -237,11 +250,13 @@ export class AccountBuilder extends BaseServiceBuilder {
             ? AccountId.fromString(transferInput.accountId)
             : transferInput.accountId;
 
-        const amountValue = typeof transferInput.amount === 'string' || typeof transferInput.amount === 'number'
-          ? transferInput.amount
-          : transferInput.amount.toString();
+        const amountValue =
+          typeof transferInput.amount === 'string' ||
+          typeof transferInput.amount === 'number'
+            ? transferInput.amount
+            : transferInput.amount.toString();
 
-        const sdkHbarAmount = Hbar.fromTinybars(amountValue);
+        const sdkHbarAmount = Hbar.fromString(amountValue.toString());
 
         transaction.addHbarTransfer(accountId, sdkHbarAmount);
 
@@ -609,12 +624,15 @@ export class AccountBuilder extends BaseServiceBuilder {
       ownerAccId = this.kit.signer.getAccountId();
     }
 
-
     const parts = params.nftIdString.split('.');
     if (parts.length !== 4) {
-      throw new Error(`Invalid nftIdString format: ${params.nftIdString}. Expected format like "0.0.token.serial".`);
+      throw new Error(
+        `Invalid nftIdString format: ${params.nftIdString}. Expected format like "0.0.token.serial".`
+      );
     }
-    const sdkTokenId = TokenId.fromString(`${parts[0]}.${parts[1]}.${parts[2]}`);
+    const sdkTokenId = TokenId.fromString(
+      `${parts[0]}.${parts[1]}.${parts[2]}`
+    );
     const sdkSerial = Long.fromString(parts[3]);
     const sdkNftId = new NftId(sdkTokenId, sdkSerial);
 
@@ -625,7 +643,7 @@ export class AccountBuilder extends BaseServiceBuilder {
       );
 
     if (params.memo) {
-        transaction.setTransactionMemo(params.memo);
+      transaction.setTransactionMemo(params.memo);
     }
 
     this.setCurrentTransaction(transaction);
@@ -683,9 +701,13 @@ export class AccountBuilder extends BaseServiceBuilder {
    * @param {SignScheduledTransactionParams} params Parameters for the ScheduleSign transaction.
    * @returns {this} The builder instance for chaining.
    */
-  public prepareSignScheduledTransaction(params: SignScheduledTransactionParams): this {
+  public prepareSignScheduledTransaction(
+    params: SignScheduledTransactionParams
+  ): this {
     if (!params.scheduleId) {
-      throw new Error('scheduleId is required to prepare a ScheduleSignTransaction.');
+      throw new Error(
+        'scheduleId is required to prepare a ScheduleSignTransaction.'
+      );
     }
 
     const scheduleId =

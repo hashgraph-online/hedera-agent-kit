@@ -14,7 +14,7 @@ import {
   DeleteFileParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
-import { HederaAgentKit } from '../../agent';
+import { HederaAgentKit } from '../../agent/agent';
 
 const MAX_FILE_APPEND_BYTES = 6000;
 

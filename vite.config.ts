@@ -18,6 +18,10 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         external: [
+          '@hashgraph/sdk',
+          '@hashgraphonline/hashinal-wc',
+          '@hashgraphonline/standards-sdk',
+          '@hashgraphonline/standards-agent-kit',
           '@langchain/core',
           '@langchain/langgraph',
           '@langchain/openai',

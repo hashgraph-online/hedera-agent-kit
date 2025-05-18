@@ -1,5 +1,5 @@
 import { StructuredTool, Tool } from '@langchain/core/tools';
-import HederaAgentKit from '../agent';
+import HederaAgentKit from '../agent/agent';
 import * as dotenv from 'dotenv';
 import { PrivateKey } from '@hashgraph/sdk';
 import { initializeHCS10Client } from '@hashgraphonline/standards-agent-kit';

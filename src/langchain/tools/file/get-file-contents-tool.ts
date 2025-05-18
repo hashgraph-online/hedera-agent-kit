@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Tool, ToolParams } from '@langchain/core/tools';
-import { HederaAgentKit } from '../../../agent';
+import { HederaAgentKit } from '../../../agent/agent';
 import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
 import { FileId, FileContentsQuery } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';

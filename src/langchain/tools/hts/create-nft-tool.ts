@@ -81,9 +81,11 @@ const NFTCreateZodSchemaCore = z.object({
     .describe('The publicly visible name of the NFT collection.'),
   tokenSymbol: z
     .string()
+    .optional()
     .describe('The publicly visible symbol of the NFT collection.'),
   treasuryAccountId: z
     .string()
+    .optional()
     .describe('Treasury account ID (e.g., "0.0.xxxx").'),
   adminKey: z
     .string()
@@ -154,7 +156,9 @@ const NFTCreateZodSchemaCore = z.object({
       SDKTokenSupplyType.Finite.toString(),
       SDKTokenSupplyType.Infinite.toString(),
     ])
-    .describe('Supply type: FINITE or INFINITE. NFTs typically use FINITE.'),
+    .optional()
+    .default(SDKTokenSupplyType.Finite.toString())
+    .describe('Supply type: FINITE or INFINITE. NFTs typically use FINITE. Defaults to FINITE if not specified.'),
   maxSupply: z
     .union([z.number(), z.string()])
     .optional()

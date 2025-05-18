@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { StructuredTool, ToolParams } from '@langchain/core/tools';
-import { HederaAgentKit } from '../../../agent';
+import { HederaAgentKit } from '../../../agent/agent';
 import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
 import { CallbackManagerForToolRun } from '@langchain/core/callbacks/manager';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';

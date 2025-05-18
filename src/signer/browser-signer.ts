@@ -5,7 +5,8 @@ import {
   Signer as HederaSdkSigner,
   PrivateKey,
 } from '@hashgraph/sdk';
-import { AbstractSigner, HederaNetworkType } from './abstract-signer';
+import { AbstractSigner } from './abstract-signer';
+import { HederaNetworkType } from '../types';
 import { HashinalsWalletConnectSDK } from '@hashgraphonline/hashinal-wc';
 
 /**

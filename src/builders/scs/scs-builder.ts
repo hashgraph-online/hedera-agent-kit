@@ -20,7 +20,7 @@ import {
   ContractCallQueryParams,
 } from '../../types';
 import { BaseServiceBuilder } from '../base-service-builder';
-import { HederaAgentKit } from '../../agent';
+import { HederaAgentKit } from '../../agent/agent';
 
 const DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
