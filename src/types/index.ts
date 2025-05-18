@@ -23,7 +23,6 @@ import {
   ScheduleId,
 } from '@hashgraph/sdk';
 
-// Re-export necessary SDK types for use in other modules (e.g., LangChain tools)
 export {
   PublicKey,
   AccountId,

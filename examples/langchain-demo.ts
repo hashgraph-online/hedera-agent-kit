@@ -14,6 +14,8 @@ import { Transaction } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import * as readline from 'readline';
 import { HederaConversationalAgent, AgentResponse } from '../src/agent/conversational-agent';
+import { HelloWorldPlugin } from './hello-world-plugin';
+import { IPlugin } from '@hashgraphonline/standards-agent-kit';
 
 function createInterface() {
   return readline.createInterface({
@@ -58,16 +60,21 @@ async function main() {
 
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
+  const helloPluginInstance = new HelloWorldPlugin();
 
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
     operationalMode: 'provideBytes',
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,
+    scheduleUserTransactionsInBytesMode: false,
+    pluginConfig: {
+      plugins: [helloPluginInstance as IPlugin],
+    }
   });
 
   await conversationalAgent.initialize();
-  console.log('HederaConversationalAgent initialized. Type "exit" to quit.');
+  console.log('HederaConversationalAgent initialized. Type "exit" to quit, or try "say hello to Hedera".');
 
   const chatHistory: Array<{ type: 'human' | 'ai'; content: string }> = [];
   const rl = createInterface();

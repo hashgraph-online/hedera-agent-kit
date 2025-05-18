@@ -33,14 +33,13 @@ import {
 } from '../tools';
 import {
   HederaMirrorNode,
-  Logger as StandardsSdkLogger,
-  AccountResponse as StandardsSdkAccountResponse,
-  TopicResponse as StandardsSdkTopicResponse,
+  AccountResponse,
+  TopicResponse,
+  Logger,
 } from '@hashgraphonline/standards-sdk';
 import {
   IPlugin,
-  PluginLoader,
-  PluginContext as StandardsAgentKitPluginContext,
+  GenericPluginContext,
 } from '@hashgraphonline/standards-agent-kit';
 import { Tool } from '@langchain/core/tools';
 import { HcsBuilder } from '../builders/hcs/hcs-builder';
@@ -52,12 +51,12 @@ import { ExecuteResult } from '../builders/base-service-builder';
 import { BigNumber } from 'bignumber.js';
 import { createHederaTools } from '../langchain';
 
-interface PluginConfig {
-  directories?: string[];
-  packages?: string[];
+export interface PluginConfig {
+  plugins?: IPlugin[];
   appConfig?: Record<string, unknown> | undefined;
 }
-const NOT_INITIALIZED_ERROR = 'HederaAgentKit not initialized. Call await kit.initialize() first.';
+const NOT_INITIALIZED_ERROR =
+  'HederaAgentKit not initialized. Call await kit.initialize() first.';
 
 /**
  * HederaAgentKit provides a simplified interface for interacting with the Hedera network,
@@ -74,7 +73,7 @@ export class HederaAgentKit {
   private aggregatedTools: Tool[];
   private pluginConfigInternal?: PluginConfig | undefined;
   private isInitialized: boolean = false;
-  public readonly logger: StandardsSdkLogger;
+  public readonly logger: Logger;
   public operationalMode: AgentOperationalMode;
   public userAccountId?: string | undefined;
   public scheduleUserTransactionsInBytesMode: boolean;
@@ -88,7 +87,7 @@ export class HederaAgentKit {
   ) {
     this.signer = signer;
     this.network = this.signer.getNetwork();
-    this.logger = new StandardsSdkLogger({
+    this.logger = new Logger({
       level: 'info',
       module: 'HederaAgentKit',
     });
@@ -108,7 +107,7 @@ export class HederaAgentKit {
 
     this.mirrorNode = new HederaMirrorNode(
       this.network,
-      new StandardsSdkLogger({
+      new Logger({
         level: 'info',
         module: 'HederaAgentKit-MirrorNode',
       })
@@ -119,7 +118,8 @@ export class HederaAgentKit {
     this.aggregatedTools = [];
     this.operationalMode = initialOperationalMode;
     this.userAccountId = userAccountId;
-    this.scheduleUserTransactionsInBytesMode = scheduleUserTransactionsInBytesMode;
+    this.scheduleUserTransactionsInBytesMode =
+      scheduleUserTransactionsInBytesMode;
   }
 
   /**
@@ -134,65 +134,48 @@ export class HederaAgentKit {
 
     this.loadedPlugins = [];
 
-    const contextForLoadedPlugins: StandardsAgentKitPluginContext = {
-      //@ts-ignore weird type inference
-      logger: this.logger,
-      //eslint-disable-next-line multiline-comment-style
-      //TODO: we need to tweak the plugin loader to not require a client
-      //@ts-ignore
-      client: undefined,
+    const contextForPlugins: GenericPluginContext = {
+      logger: this.logger as any,
       config: this.pluginConfigInternal?.appConfig || {},
+      client: {
+        getNetwork: () => this.network,
+      },
     };
 
-    if (this.pluginConfigInternal?.directories) {
-      for (const dir of this.pluginConfigInternal.directories) {
+    if (this.pluginConfigInternal?.plugins) {
+      for (const pluginInstance of this.pluginConfigInternal.plugins) {
         try {
-          this.logger.info(`Loading plugins from directory: ${dir}`);
-          const plugin = await PluginLoader.loadFromDirectory(
-            dir,
-            contextForLoadedPlugins
-          );
-          this.loadedPlugins.push(plugin);
           this.logger.info(
-            `Successfully loaded plugin: ${plugin.name} from ${dir}`
+            `Initializing directly provided plugin: ${pluginInstance.name}`
+          );
+          await pluginInstance.initialize(contextForPlugins);
+          this.loadedPlugins.push(pluginInstance);
+          this.logger.info(
+            `Successfully initialized and added directly provided plugin: ${pluginInstance.name}`
           );
         } catch (error: unknown) {
           this.logger.error(
-            `Failed to load plugin from directory ${dir}: ${error instanceof Error ? error.message : String(error)}`
-          );
-        }
-      }
-    }
-
-    if (this.pluginConfigInternal?.packages) {
-      for (const pkg of this.pluginConfigInternal.packages) {
-        try {
-          this.logger.info(`Loading plugin from package: ${pkg}`);
-          const plugin = await PluginLoader.loadFromPackage(
-            pkg,
-            contextForLoadedPlugins
-          );
-          this.loadedPlugins.push(plugin);
-          this.logger.info(
-            `Successfully loaded plugin: ${plugin.name} from package ${pkg}`
-          );
-        } catch (error: unknown) {
-          this.logger.error(
-            `Failed to load plugin from package ${pkg}: ${error instanceof Error ? error.message : String(error)}`
+            `Failed to initialize directly provided plugin ${
+              pluginInstance.name
+            }: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
     }
 
     const coreKitTools = await createHederaTools(this);
-    const pluginTools: Tool[] = [];
-    const hcs10Tools: Tool[] = [];
+    const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
+      return plugin.getTools();
+    }) as unknown as Tool[];
 
     this.aggregatedTools = [
       ...coreKitTools,
-      ...hcs10Tools,
       ...pluginTools,
     ] as unknown as Tool[];
+    console.log(
+      'langchain tools are',
+      this.aggregatedTools.map((a) => a.name)
+    );
     this.isInitialized = true;
     this.logger.info(
       'HederaAgentKit initialized successfully with all tools aggregated.'
@@ -357,11 +340,11 @@ export class HederaAgentKit {
   /**
    * Retrieves information about a specific HCS topic from the mirror node.
    * @param {string} topicIdString - The topic ID string (e.g., "0.0.xxxx").
-   * @returns {Promise<StandardsSdkTopicResponse | null>} A promise that resolves to the topic information from the standards-sdk.
+   * @returns {Promise<TopicResponse | null>} A promise that resolves to the topic information from the standards-sdk.
    */
   public async getTopicInfo(
     topicIdInput: TopicId | string
-  ): Promise<StandardsSdkTopicResponse | null> {
+  ): Promise<TopicResponse | null> {
     const topicId =
       typeof topicIdInput === 'string'
         ? TopicId.fromString(topicIdInput)
@@ -518,9 +501,15 @@ export class HederaAgentKit {
     }
   }
 
+  /**
+   * Retrieves information about a specific Hedera account from the mirror node.
+   * @param {AccountId | string} accountIdInput - The account ID or its string representation.
+   * @returns {Promise<AccountResponse>} A promise that resolves to the account information from the standards-sdk.
+   * @throws {Error} If the mirror node request fails.
+   */
   public async getAccountInfo(
     accountIdInput: AccountId | string
-  ): Promise<StandardsSdkAccountResponse> {
+  ): Promise<AccountResponse> {
     const accountId =
       typeof accountIdInput === 'string'
         ? AccountId.fromString(accountIdInput)
@@ -595,8 +584,7 @@ export class HederaAgentKit {
       );
       return {
         success: false,
-        error:
-          error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error),
         transactionId: transactionIdToReport,
       };
     }

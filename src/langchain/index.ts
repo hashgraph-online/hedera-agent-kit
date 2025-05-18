@@ -137,13 +137,15 @@ export async function createHederaTools(
 
       const standardsToolsArray = Object.values(standardsKit.tools).filter(
         Boolean
-      ) as unknown as Tool[];
+      );
 
       hederaKit.logger.info(
         `Initialized ${standardsToolsArray.length} HCS-10 tools.`
       );
-      //@ts-ignore
-      return [...hederaTools, ...standardsToolsArray];
+      return [
+        ...hederaTools,
+        ...standardsToolsArray,
+      ] as unknown as StructuredTool[];
     }
   } catch (error: unknown) {
     const e = error as Error;
