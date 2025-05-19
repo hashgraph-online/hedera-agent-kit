@@ -35,6 +35,7 @@ export abstract class BaseServiceBuilder {
   protected currentTransaction: Transaction | null = null;
   protected logger: Logger;
   protected kit: HederaAgentKit;
+  protected notes: string[] = [];
 
   /**
    * @param {HederaAgentKit} kit - The HederaAgentKit instance
@@ -132,7 +133,6 @@ export abstract class BaseServiceBuilder {
     schedule?: boolean;
     scheduleMemo?: string;
     schedulePayerAccountId?: string | AccountId;
-    scheduleAdminKey?: Key;
   }): Promise<ExecuteResult> {
     const innerTransaction = this.currentTransaction;
 
@@ -164,9 +164,23 @@ export abstract class BaseServiceBuilder {
             : options.schedulePayerAccountId;
         scheduleCreateTx.setPayerAccountId(payerAccountId);
       }
-      if (options.scheduleAdminKey) {
-        scheduleCreateTx.setAdminKey(options.scheduleAdminKey);
+      const currentAccount = await this.kit.getOperator();
+      const thresholdKey = new KeyList().setThreshold(1);
+
+      if (currentAccount.publicKey) {
+        thresholdKey.push(currentAccount.publicKey);
       }
+
+      if (this.kit.userAccountId) {
+        const userResponse = await this.kit.getAccountInfo(
+          AccountId.fromString(this.kit.userAccountId)
+        );
+        if (userResponse?.key?.key) {
+          thresholdKey.push(PublicKey.fromString(userResponse.key.key));
+        }
+      }
+
+      scheduleCreateTx.setAdminKey(thresholdKey);
 
       transactionToExecute = scheduleCreateTx;
       if (!transactionToExecute.transactionId) {
@@ -264,8 +278,6 @@ export abstract class BaseServiceBuilder {
    * than the one initially configured with the HederaAgentKit/builder instance.
    * Note: The transaction should ideally not be frozen, or if frozen, its transactionId
    * should be compatible with the newSigner's accountId as the payer.
-   * If the transaction is already frozen with a different payer, this method will attempt
-   * to re-build and re-freeze.
    * @param {AbstractSigner} newSigner - The signer to use for this specific execution.
    * @returns {Promise<ExecuteResult>}
    * @throws {Error}
@@ -326,6 +338,18 @@ export abstract class BaseServiceBuilder {
    */
   public getCurrentTransaction(): Transaction | null {
     return this.currentTransaction;
+  }
+
+  public addNote(note: string): void {
+    this.notes.push(note);
+  }
+
+  public getNotes(): string[] {
+    return this.notes;
+  }
+
+  public clearNotes(): void {
+    this.notes = [];
   }
 
   protected async parseKey(

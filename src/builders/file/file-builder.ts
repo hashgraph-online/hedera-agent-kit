@@ -32,6 +32,7 @@ export class FileBuilder extends BaseServiceBuilder {
    * @returns {this}
    */
   public createFile(params: CreateFileParams): this {
+    this.clearNotes();
     const transaction = new FileCreateTransaction();
 
     if (params.contents) {
@@ -76,6 +77,7 @@ export class FileBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public appendFile(params: AppendFileParams): this {
+    this.clearNotes();
     if (!params.fileId) {
       throw new Error('File ID is required to append to a file.');
     }
@@ -91,6 +93,7 @@ export class FileBuilder extends BaseServiceBuilder {
         console.warn(
           `FileBuilder: Content size (${contentsBytes.length} bytes) for appendFile exceeds single transaction limit (${MAX_FILE_APPEND_BYTES} bytes). Only the first chunk will be prepared. Implement multi-transaction append for larger files.`
         );
+        this.addNote(`Content for file append was truncated to ${MAX_FILE_APPEND_BYTES} bytes due to single transaction limit.`);
         transaction.setContents(
           contentsBytes.subarray(0, MAX_FILE_APPEND_BYTES)
         );
@@ -108,6 +111,7 @@ export class FileBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public updateFile(params: UpdateFileParams): this {
+    this.clearNotes();
     if (!params.fileId) {
       throw new Error('File ID is required to update a file.');
     }
@@ -155,6 +159,7 @@ export class FileBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public deleteFile(params: DeleteFileParams): this {
+    this.clearNotes();
     if (!params.fileId) {
       throw new Error('File ID is required to delete a file.');
     }

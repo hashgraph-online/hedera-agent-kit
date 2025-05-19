@@ -9,8 +9,11 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { ServerSigner } from '../src/signer/server-signer';
-import { HederaNetworkType } from '../src/signer/abstract-signer';
-import { Transaction } from '@hashgraph/sdk';
+import {
+  Transaction,
+  ScheduleInfoQuery,
+  ScheduleId as SDKScheduleId,
+} from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import * as readline from 'readline';
 import {
@@ -19,6 +22,7 @@ import {
 } from '../src/agent/conversational-agent';
 import { HelloWorldPlugin } from './hello-world-plugin';
 import { IPlugin } from '@hashgraphonline/standards-agent-kit';
+import { NetworkType } from '../../standards-sdk/src';
 
 function createInterface() {
   return readline.createInterface({
@@ -34,8 +38,7 @@ async function main() {
 
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
   const operatorKey = process.env.HEDERA_PRIVATE_KEY;
-  const network = (process.env.HEDERA_NETWORK ||
-    'testnet') as HederaNetworkType;
+  const network = (process.env.HEDERA_NETWORK || 'testnet') as NetworkType;
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
   const userAccountId = process.env.USER_ACCOUNT_ID;
@@ -65,16 +68,14 @@ async function main() {
 
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
-  const helloPluginInstance = new HelloWorldPlugin();
-
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
     operationalMode: 'provideBytes',
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,
-    scheduleUserTransactionsInBytesMode: true,
+    scheduleUserTransactionsInBytesMode: false,
     pluginConfig: {
-      plugins: [helloPluginInstance as IPlugin],
+      plugins: [new HelloWorldPlugin() as IPlugin],
     },
   });
 
@@ -86,18 +87,22 @@ async function main() {
   const chatHistory: Array<{ type: 'human' | 'ai'; content: string }> = [];
   const rl = createInterface();
 
-  async function handleUserSignedExecution(transactionBytesBase64: string) {
+  async function handleUserSignedExecution(
+    transactionBytesBase64: string,
+    originalPromptForHistory?: string
+  ) {
     if (!userAccountId || !userPrivateKey) {
       console.log(
         'Agent > USER_ACCOUNT_ID and USER_PRIVATE_KEY are not set. Cannot execute with user key.'
       );
       chatHistory.push({
         type: 'ai',
-        content:
-          'User keys not configured in .env, so I cannot proceed with user signing.',
+        content: 'User keys not configured, cannot proceed with user signing.',
       });
       return;
     }
+    if (originalPromptForHistory)
+      chatHistory.push({ type: 'human', content: originalPromptForHistory });
 
     console.log(
       `Agent > Preparing and executing transaction with user account ${userAccountId}...`
@@ -114,8 +119,18 @@ async function main() {
       );
       let transaction = Transaction.fromBytes(txBytes);
 
-      const frozenTx = await transaction.freezeWith(userSigner.getClient());
+      // Always attempt to freeze and sign with the user's key for this demo.
+      // If the transaction was already frozen (e.g., a ScheduleSign prepared by the agent),
+      // freezeWith() on an already frozen tx might be a no-op or error depending on SDK version/state.
+      // For simplicity, we assume transaction from bytes needs user signature and payment.
+      let frozenTx;
+      if (transaction.isFrozen()) {
+        frozenTx = transaction;
+      } else {
+        frozenTx = await transaction.freezeWith(userSigner.getClient());
+      }
       const signedTx = await frozenTx.sign(userSigner.getOperatorPrivateKey());
+
       const response = await signedTx.execute(userSigner.getClient());
       const receipt = await response.getReceipt(userSigner.getClient());
 
@@ -133,6 +148,78 @@ async function main() {
     }
   }
 
+  async function processAndRespond(
+    userInput: string,
+    isFollowUp: boolean = false
+  ) {
+    if (!isFollowUp) {
+      chatHistory.push({ type: 'human', content: userInput });
+    }
+
+    const agentResponse: AgentResponse =
+      await conversationalAgent.processMessage(userInput, chatHistory);
+
+    console.log('Agent Message > ', agentResponse.message);
+    if (agentResponse.output !== agentResponse.message) {
+      console.log('Agent Tool Output (JSON) > ', agentResponse.output);
+    }
+    chatHistory.push({
+      type: 'ai',
+      content: agentResponse.message || agentResponse.output,
+    });
+
+    if (agentResponse.scheduleId) {
+      const scheduleIdToSign = agentResponse.schedule_id;
+      rl.question(
+        `Agent > Transaction scheduled with ID ${scheduleIdToSign}. Sign and submit with your account ${userAccountId}? (y/n): `,
+        async (answer) => {
+          if (answer.toLowerCase() === 'y') {
+            const followUpInput = `Sign and submit scheduled transaction ${scheduleIdToSign}`;
+            console.log(`\nUser (follow-up) > ${followUpInput}`);
+            await processAndRespond(followUpInput, true);
+          } else {
+            chatHistory.push({
+              type: 'ai',
+              content: 'Okay, scheduled transaction not signed.',
+            });
+            askQuestion();
+          }
+        }
+      );
+      return;
+    }
+
+    if (agentResponse.transactionBytes) {
+      if (userAccountId && userPrivateKey) {
+        const finalBytes = agentResponse.transactionBytes;
+        const originalPromptForHistory = isFollowUp ? undefined : userInput;
+        rl.question(
+          `Agent > Transaction bytes received. Sign and execute with YOUR account ${userAccountId}? (y/n): `,
+          async (answer) => {
+            if (answer.toLowerCase() === 'y') {
+              await handleUserSignedExecution(
+                finalBytes,
+                originalPromptForHistory
+              );
+            } else {
+              chatHistory.push({
+                type: 'ai',
+                content: 'Okay, transaction not executed.',
+              });
+            }
+            askQuestion();
+          }
+        );
+        return;
+      }
+    }
+
+    if (agentResponse.error) {
+      console.error('Agent > Error reported by agent:', agentResponse.error);
+    }
+    askQuestion();
+  }
+
   function askQuestion() {
     rl.question('User > ', async (input) => {
       if (input.toLowerCase() === 'exit') {
@@ -140,58 +227,24 @@ async function main() {
         console.log('\nInteractive demo finished.');
         return;
       }
-
       try {
         console.log(`\nInvoking agent with: "${input}"`);
-        chatHistory.push({ type: 'human', content: input });
-
-        const agentResponse: AgentResponse =
-          await conversationalAgent.processMessage(input, chatHistory);
-
-        console.log('Agent > ', agentResponse.output);
-        chatHistory.push({ type: 'ai', content: agentResponse.output });
-
-        if (agentResponse.transactionBytes) {
-          if (userAccountId && userPrivateKey) {
-            const finalBytes = agentResponse.transactionBytes;
-            rl.question(
-              `Agent > Transaction bytes received. Do you want to sign and execute this with YOUR account ${userAccountId}? (y/n): `,
-              async (answer) => {
-                if (answer.toLowerCase() === 'y') {
-                  await handleUserSignedExecution(finalBytes);
-                } else {
-                  chatHistory.push({
-                    type: 'ai',
-                    content: 'Okay, transaction not executed by user.',
-                  });
-                }
-                askQuestion();
-              }
-            );
-            return;
-          } else {
-            chatHistory.push({
-              type: 'ai',
-              content:
-                'Transaction bytes were generated, but your user keys are not configured in .env to attempt signing.',
-            });
-          }
-        } else if (agentResponse.error) {
-          console.error(
-            'Agent > Error reported by agent:',
-            agentResponse.error
-          );
-        }
+        await processAndRespond(input);
       } catch (e: any) {
         const errorMsg = e.message || String(e);
         console.error('Error during agent invocation loop:', errorMsg);
-        chatHistory.push({ type: 'human', content: input });
+        if (
+          chatHistory[chatHistory.length - 1]?.content !== input ||
+          chatHistory[chatHistory.length - 1]?.type !== 'human'
+        ) {
+          chatHistory.push({ type: 'human', content: input });
+        }
         chatHistory.push({
           type: 'ai',
           content: `Sorry, a critical error occurred: ${errorMsg}`,
         });
+        askQuestion();
       }
-      askQuestion();
     });
   }
   askQuestion();

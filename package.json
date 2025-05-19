@@ -1,6 +1,6 @@
 {
   "name": "@hashgraphonline/hedera-agent-kit",
-  "version": "0.0.12",
+  "version": "0.0.13",
   "type": "module",
   "main": "./dist/node/index.cjs",
   "module": "./dist/node/index.mjs",
@@ -29,6 +29,7 @@
   ],
   "scripts": {
     "demo:langchain": "tsx examples/langchain-demo.ts",
+    "demo:notes": "tsx examples/test-notes-system.ts",
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",
     "prepare": "npm run build",

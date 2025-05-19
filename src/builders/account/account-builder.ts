@@ -51,7 +51,9 @@ export class AccountBuilder extends BaseServiceBuilder {
    * @throws {Error} If required parameters are missing.
    */
   public createAccount(params: CreateAccountParams): this {
+    this.clearNotes();
     const transaction = new AccountCreateTransaction();
+    let autoRenewPeriodSetByUser = false;
 
     if (typeof params.key !== 'undefined') {
       if (params.key === null) {
@@ -94,21 +96,18 @@ export class AccountBuilder extends BaseServiceBuilder {
         this.logger.warn('Received null for autoRenewPeriod in createAccount.');
       } else if (
         typeof params.autoRenewPeriod === 'number' ||
-        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        //@ts-ignore
-        params.autoRenewPeriod instanceof Long
+        (params.autoRenewPeriod as any) instanceof Long
       ) {
-        transaction.setAutoRenewPeriod(params.autoRenewPeriod);
+        transaction.setAutoRenewPeriod(params.autoRenewPeriod as number | Long);
+        autoRenewPeriodSetByUser = true;
       } else if (
         typeof params.autoRenewPeriod === 'object' &&
-        //eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        //@ts-ignore
-        typeof params.autoRenewPeriod.seconds === 'number'
+        typeof (params.autoRenewPeriod as any).seconds === 'number'
       ) {
         transaction.setAutoRenewPeriod(
-          (params as unknown as { autoRenewPeriod: { seconds: number } })
-            .autoRenewPeriod.seconds
+          (params.autoRenewPeriod as { seconds: number }).seconds
         );
+        autoRenewPeriodSetByUser = true;
       } else {
         this.logger.warn(
           'Invalid autoRenewPeriod in createAccount, using default.'
@@ -119,6 +118,10 @@ export class AccountBuilder extends BaseServiceBuilder {
       }
     } else {
       transaction.setAutoRenewPeriod(DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS);
+    }
+
+    if (!autoRenewPeriodSetByUser) {
+      this.addNote(`Default auto-renew period of ${DEFAULT_ACCOUNT_AUTORENEW_PERIOD_SECONDS} seconds applied.`);
     }
 
     if (typeof params.memo !== 'undefined') {
@@ -196,6 +199,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     params: HbarTransferParams,
     isUserInitiated: boolean = true
   ): this {
+    this.clearNotes();
     const transaction = new TransferTransaction();
     if (!params.transfers || params.transfers.length === 0) {
       throw new Error('HbarTransferParams must include at least one transfer.');
@@ -232,6 +236,7 @@ export class AccountBuilder extends BaseServiceBuilder {
             this.kit.userAccountId
           } to ${recipientAccountId.toString()}`
         );
+        this.addNote(`Configured HBAR transfer from your account (${this.kit.userAccountId}) to ${recipientAccountId.toString()} for ${sdkHbarAmount.toString()}.`);
 
         transaction.addHbarTransfer(recipientAccountId, sdkHbarAmount);
         transaction.addHbarTransfer(

@@ -35,6 +35,7 @@ export class HcsBuilder extends BaseServiceBuilder {
    * @returns {Promise<this>}
    */
   public async createTopic(params: CreateTopicParams): Promise<this> {
+    this.clearNotes();
     const transaction = new TopicCreateTransaction();
 
     if (params.memo) {
@@ -66,10 +67,16 @@ export class HcsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
+      this.addNote(`Default auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS} seconds applied for topic.`);
     }
 
     if (params.autoRenewAccountId) {
       transaction.setAutoRenewAccountId(params.autoRenewAccountId);
+    } else {
+      this.logger.warn(
+        'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for createTopic.'
+      );
+      this.addNote('Could not set fee exempt accounts for topic creation: MirrorNode client not available on signer.');
     }
 
     if (params.customFees && params.customFees.length > 0) {
@@ -81,6 +88,7 @@ export class HcsBuilder extends BaseServiceBuilder {
         this.logger.warn(
           'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for createTopic.'
         );
+        this.addNote('Could not attempt to set fee exempt accounts for topic creation: MirrorNode client not available on signer.');
       } else {
         try {
           const publicKeys: PublicKey[] = [];
@@ -100,6 +108,7 @@ export class HcsBuilder extends BaseServiceBuilder {
           this.logger.error(
             `Failed to process exemptAccountIds for createTopic: ${error.message}`
           );
+          this.addNote(`Error processing fee exempt accounts for topic creation: ${error.message}. They may not be set.`);
         }
       }
     }
@@ -174,6 +183,7 @@ export class HcsBuilder extends BaseServiceBuilder {
    * @throws {Error} If topicId is not provided.
    */
   public async updateTopic(params: UpdateTopicParams): Promise<this> {
+    this.clearNotes();
     if (!params.topicId) {
       throw new Error('Topic ID is required to update a topic.');
     }
@@ -217,13 +227,14 @@ export class HcsBuilder extends BaseServiceBuilder {
 
     if (Object.prototype.hasOwnProperty.call(params, 'exemptAccountIds')) {
       if (
-        !this.kit.signer.mirrorNode &&
         params.exemptAccountIds &&
-        params.exemptAccountIds.length > 0
+        params.exemptAccountIds.length > 0 &&
+        !this.kit.signer.mirrorNode 
       ) {
         this.logger.warn(
           'MirrorNode client is not available on the signer, cannot set fee exempt keys by account ID for updateTopic if account IDs are provided and not empty.'
         );
+        this.addNote('Could not set fee exempt accounts for topic update: MirrorNode client not available on signer.');
       } else if (params.exemptAccountIds) {
         if (params.exemptAccountIds.length === 0) {
           transaction.setFeeExemptKeys([]);
@@ -238,12 +249,15 @@ export class HcsBuilder extends BaseServiceBuilder {
             }
             if (publicKeys.length > 0) {
               transaction.setFeeExemptKeys(publicKeys);
+            } else {
+              this.addNote('Fee exempt accounts were provided, but no valid public keys could be resolved for them.');
             }
           } catch (e: unknown) {
             const error = e as Error;
             this.logger.error(
               `Failed to process exemptAccountIds for updateTopic: ${error.message}`
             );
+            this.addNote(`Error processing fee exempt accounts for topic update: ${error.message}. They may not be set.`);
           }
         }
       }

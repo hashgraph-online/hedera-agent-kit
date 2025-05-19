@@ -38,6 +38,7 @@ export class ScsBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public createContract(params: CreateContractParams): this {
+    this.clearNotes();
     const transaction = new ContractCreateTransaction();
 
     if (params.bytecodeFileId) {
@@ -92,6 +93,7 @@ export class ScsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else {
       transaction.setAutoRenewPeriod(DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS);
+      this.addNote(`Default auto-renew period of ${DEFAULT_CONTRACT_AUTORENEW_PERIOD_SECONDS} seconds applied for contract.`);
     }
 
     if (params.stakedAccountId) {
@@ -118,6 +120,7 @@ export class ScsBuilder extends BaseServiceBuilder {
    * @returns {this}
    */
   public executeContract(params: ExecuteContractParams): this {
+    this.clearNotes();
     let gasValue: Long | number;
     if (typeof params.gas === 'number') {
       gasValue = params.gas;
@@ -158,6 +161,7 @@ export class ScsBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public updateContract(params: UpdateContractParams): this {
+    this.clearNotes();
     if (params.contractId === undefined) {
       throw new Error('Contract ID is required to update a contract.');
     }
@@ -210,6 +214,7 @@ export class ScsBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public deleteContract(params: DeleteContractParams): this {
+    this.clearNotes();
     if (params.contractId === undefined) {
       throw new Error('Contract ID is required to delete a contract.');
     }

@@ -82,10 +82,10 @@ interface ScheduleExecutionOptions {
  * @template S - The Zod schema that defines the input parameters for the specific tool
  */
 export abstract class BaseHederaTransactionTool<
-  //@ts-ignore: Ignoring complex type compatibility issues
+  //@ts-ignore
   S extends z.ZodObject<any, any, any, any>
-> extends StructuredTool<
-  //@ts-ignore: Ignoring complex type compatibility issues
+  > extends StructuredTool<
+  //@ts-ignore
   z.ZodObject<
     S['shape'] & { metaOptions: typeof HederaTransactionMetaOptionsSchema },
     any,
@@ -133,11 +133,11 @@ export abstract class BaseHederaTransactionTool<
    */
   protected async _applyMetaOptions(
     builder: BaseServiceBuilder,
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
+    metaOpts: HederaTransactionMetaOptions | undefined,
     specificCallArgs: z.infer<S>
   ): Promise<void> {
     await this._substituteKeyFields(specificCallArgs);
-    this._applyTransactionOptions(builder, args.metaOptions);
+    this._applyTransactionOptions(builder, metaOpts);
   }
 
   /**
@@ -227,16 +227,17 @@ export abstract class BaseHederaTransactionTool<
    */
   private async _handleDirectExecution(
     builder: BaseServiceBuilder,
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+    metaOpts: HederaTransactionMetaOptions | undefined,
+    allNotes: string[]
   ): Promise<string> {
-    const execOptions = this._buildScheduleOptions(args.metaOptions);
+    const execOptions = this._buildScheduleOptions(metaOpts);
 
     this.logger.info(
       `Executing transaction directly (mode: directExecution): ${this.name}`
     );
 
     const result = await builder.execute(execOptions);
-    return JSON.stringify(result);
+    return JSON.stringify({ ...result, notes: allNotes });
   }
 
   /**
@@ -244,14 +245,15 @@ export abstract class BaseHederaTransactionTool<
    */
   private async _handleProvideBytes(
     builder: BaseServiceBuilder,
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+    metaOpts: HederaTransactionMetaOptions | undefined,
+    allNotes: string[]
   ): Promise<string> {
-    const shouldSchedule = this._shouldScheduleTransaction(args.metaOptions);
+    const shouldSchedule = this._shouldScheduleTransaction(metaOpts);
 
     if (shouldSchedule) {
-      return this._handleScheduledTransaction(builder, args);
+      return this._handleScheduledTransaction(builder, metaOpts, allNotes);
     } else {
-      return this._handleUnscheduledTransaction(builder);
+      return this._handleUnscheduledTransaction(builder, allNotes);
     }
   }
 
@@ -274,20 +276,21 @@ export abstract class BaseHederaTransactionTool<
    */
   private async _handleScheduledTransaction(
     builder: BaseServiceBuilder,
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+    metaOpts: HederaTransactionMetaOptions | undefined,
+    allNotes: string[]
   ): Promise<string> {
     this.logger.info(
       `Preparing scheduled transaction (mode: provideBytes, schedule: true): ${this.name}`
     );
 
-    const execOptions = this._buildScheduleOptions(args.metaOptions, true);
+    const execOptions = this._buildScheduleOptions(metaOpts, true);
     execOptions.schedulePayerAccountId = this.hederaKit.signer.getAccountId();
 
     const scheduleCreateResult = await builder.execute(execOptions);
 
     if (scheduleCreateResult.success && scheduleCreateResult.scheduleId) {
       const description =
-        args.metaOptions?.transactionMemo ||
+        metaOpts?.transactionMemo ||
         `Scheduled ${this.name} operation.`;
 
       const userInfo = this.hederaKit.userAccountId
@@ -297,11 +300,12 @@ export abstract class BaseHederaTransactionTool<
       return JSON.stringify({
         success: true,
         op: 'schedule_create',
-        schedule_id: scheduleCreateResult.scheduleId.toString(),
+        scheduleId: scheduleCreateResult.scheduleId.toString(),
         description: description + userInfo,
         payer_account_id_scheduled_tx:
           this.hederaKit.userAccountId || 'unknown',
-        memo_scheduled_tx: args.metaOptions?.transactionMemo,
+        memo_scheduled_tx: metaOpts?.transactionMemo,
+        notes: allNotes,
       });
     } else {
       return JSON.stringify({
@@ -309,6 +313,7 @@ export abstract class BaseHederaTransactionTool<
         error:
           scheduleCreateResult.error ||
           'Failed to create schedule and retrieve ID.',
+        notes: allNotes,
       });
     }
   }
@@ -317,7 +322,8 @@ export abstract class BaseHederaTransactionTool<
    * Handle returning transaction bytes for an unscheduled transaction
    */
   private async _handleUnscheduledTransaction(
-    builder: BaseServiceBuilder
+    builder: BaseServiceBuilder,
+    allNotes: string[]
   ): Promise<string> {
     this.logger.info(
       `Returning transaction bytes (mode: provideBytes, schedule: false): ${this.name}`
@@ -328,6 +334,7 @@ export abstract class BaseHederaTransactionTool<
       success: true,
       transactionBytes: bytes,
       transactionId: builder.getCurrentTransaction()?.transactionId?.toString(),
+      notes: allNotes,
     });
   }
 
@@ -376,54 +383,85 @@ export abstract class BaseHederaTransactionTool<
    * transaction execution based on the kit's operational mode.
    */
   protected async _call(
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
+    args: z.infer<ReturnType<this['schema']>>,
     runManager?: CallbackManagerForToolRun
   ): Promise<string> {
+    const llmProvidedMetaOptions = args.metaOptions;
+    const specificCallArgs = this._extractSpecificArgsFromCombinedArgs(args);
+
     this.logger.info(
-      `Executing ${this.name} with specific args:`,
-      args as z.infer<S>,
-      'and metaOptions:',
-      args.metaOptions
+      `Executing ${this.name} with Zod-parsed specific args (schema defaults applied by LangChain):`, JSON.parse(JSON.stringify(specificCallArgs)),
+      'and metaOptions:', llmProvidedMetaOptions
     );
+
+    const zodSchemaInfoNotes: string[] = [];
+    if (this.specificInputSchema && this.specificInputSchema.shape) {
+      for (const key in this.specificInputSchema.shape) {
+        if (Object.prototype.hasOwnProperty.call(this.specificInputSchema.shape, key)) {
+          const fieldSchema = this.specificInputSchema.shape[key] as z.ZodTypeAny;
+
+          if (fieldSchema._def && (fieldSchema._def as any).typeName === 'ZodDefault') {
+            const defaultValueOrFn = (fieldSchema._def as any).defaultValue;
+            let defaultValue = defaultValueOrFn;
+            if (typeof defaultValueOrFn === 'function') {
+              try { defaultValue = defaultValueOrFn(); }
+              catch (eDefaultFn) {
+                this.logger.warn(`Could not execute default value function for key ${key}. Error: ${(eDefaultFn as Error).message}`);
+                defaultValue = '[dynamic schema default]';
+              }
+            }
+            zodSchemaInfoNotes.push(
+              `Parameter '${key}' has a tool schema default of '${JSON.stringify(defaultValue)}'. Final value used: '${JSON.stringify(specificCallArgs[key as keyof typeof specificCallArgs])}'.`
+            );
+          }
+        }
+      }
+    }
+
+    this.logger.debug('Zod Schema Default Info Notes:', zodSchemaInfoNotes);
 
     try {
       const builder = this.getServiceBuilder();
-      const specificCallArgs = this._extractSpecificArgs(args);
+      builder.clearNotes();
 
-      await this._applyMetaOptions(builder, args, specificCallArgs);
+      await this._applyMetaOptions(builder, llmProvidedMetaOptions, specificCallArgs);
       await this.callBuilderMethod(builder, specificCallArgs, runManager);
 
+      const builderAppliedDefaultNotes = builder.getNotes();
+      this.logger.debug('Builder Applied Default Notes:', builderAppliedDefaultNotes);
+      const allNotes = [...zodSchemaInfoNotes, ...builderAppliedDefaultNotes];
+      this.logger.debug('All Notes combined:', allNotes);
+
       if (this.hederaKit.operationalMode === 'directExecution') {
-        return this._handleDirectExecution(builder, args);
+        return this._handleDirectExecution(builder, llmProvidedMetaOptions, allNotes);
       } else {
-        return this._handleProvideBytes(builder, args);
+        return this._handleProvideBytes(builder, llmProvidedMetaOptions, allNotes);
       }
     } catch (error) {
-      return this._handleError(error);
+      const builder = this.getServiceBuilder();
+      const builderNotesOnError = builder ? builder.getNotes() : [];
+      const allNotesOnError = [...zodSchemaInfoNotes, ...builderNotesOnError];
+      return this._handleError(error, allNotesOnError);
     }
   }
 
-  /**
-   * Extract tool-specific arguments (without metaOptions)
-   */
-  private _extractSpecificArgs(
-    args: z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
+  private _extractSpecificArgsFromCombinedArgs(
+    combinedArgs: z.infer<ReturnType<this['schema']>>
   ): z.infer<S> {
-    const specificCallArgs = { ...args };
-    if ('metaOptions' in specificCallArgs) {
-      delete (specificCallArgs as any).metaOptions;
+    const specificArgs: Record<string, any> = {};
+    if (this.specificInputSchema && this.specificInputSchema.shape) {
+      for (const key in this.specificInputSchema.shape) {
+        if (Object.prototype.hasOwnProperty.call(combinedArgs, key)) {
+          specificArgs[key] = (combinedArgs as any)[key];
+        }
+      }
     }
-    return specificCallArgs as z.infer<S>;
+    return specificArgs as z.infer<S>;
   }
 
-  /**
-   * Handle errors in a consistent format
-   */
-  private _handleError(error: unknown): string {
-    const errorMessage =
-      error instanceof Error ? error.message : JSON.stringify(error);
-
+  private _handleError(error: unknown, notes?: string[]): string {
+    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
     this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
-    return JSON.stringify({ success: false, error: errorMessage });
+    return JSON.stringify({ success: false, error: errorMessage, notes: notes || [] });
   }
 }

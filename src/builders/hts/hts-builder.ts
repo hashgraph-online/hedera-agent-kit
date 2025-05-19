@@ -31,6 +31,7 @@ import {
   CustomFractionalFee,
   CustomRoyaltyFee,
   KeyList,
+  PublicKey,
 } from '@hashgraph/sdk';
 
 import {
@@ -66,6 +67,11 @@ import { HederaAgentKit } from '../../agent/agent';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
+function generateDefaultSymbol(tokenName: string): string {
+  if (!tokenName) return 'TOKEN';
+  return tokenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase() || 'TOKEN';
+}
+
 /**
  * HtsBuilder facilitates the construction and execution of Hedera Token Service (HTS) transactions.
  */
@@ -80,6 +86,7 @@ export class HtsBuilder extends BaseServiceBuilder {
    * @throws {Error}
    */
   public async createFungibleToken(params: FTCreateParams): Promise<this> {
+    this.clearNotes();
     let treasuryAccId = params.treasuryAccountId;
     if (
       !treasuryAccId &&
@@ -90,6 +97,7 @@ export class HtsBuilder extends BaseServiceBuilder {
         `[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for FT creation in provideBytes mode.`
       );
       treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(`Treasury account defaulted to your account (${this.kit.userAccountId}).`);
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -97,9 +105,15 @@ export class HtsBuilder extends BaseServiceBuilder {
       );
     }
 
+    let tokenSymbolToUse = params.tokenSymbol;
+    if (!tokenSymbolToUse) {
+      tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
+      this.addNote(`Token symbol defaulted to '${tokenSymbolToUse}' based on token name.`);
+    }
+
     const transaction = new TokenCreateTransaction()
       .setTokenName(params.tokenName)
-      .setTokenSymbol(params.tokenSymbol)
+      .setTokenSymbol(tokenSymbolToUse)
       .setTreasuryAccountId(treasuryAccId)
       .setTokenType(TokenType.FungibleCommon)
       .setSupplyType(params.supplyType)
@@ -150,6 +164,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
+      this.addNote(`Default auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS} seconds applied for fungible token.`);
     }
 
     this.setCurrentTransaction(transaction);
@@ -157,11 +172,13 @@ export class HtsBuilder extends BaseServiceBuilder {
   }
 
   /**
+   * Creates a non-fungible token. If the supply key is not provided, the operator's public key will be used.
    * @param {NFTCreateParams} params
    * @returns {Promise<this>}
    * @throws {Error}
    */
   public async createNonFungibleToken(params: NFTCreateParams): Promise<this> {
+    this.clearNotes();
     let treasuryAccId = params.treasuryAccountId;
     if (
       !treasuryAccId &&
@@ -172,6 +189,7 @@ export class HtsBuilder extends BaseServiceBuilder {
         `[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for NFT creation in provideBytes mode.`
       );
       treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(`Treasury account for NFT collection defaulted to your account (${this.kit.userAccountId}).`);
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -179,9 +197,15 @@ export class HtsBuilder extends BaseServiceBuilder {
       );
     }
 
+    let tokenSymbolToUse = params.tokenSymbol;
+    if (!tokenSymbolToUse) {
+      tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
+      this.addNote(`NFT collection symbol defaulted to '${tokenSymbolToUse}' based on collection name.`);
+    }
+
     const transaction = new TokenCreateTransaction()
       .setTokenName(params.tokenName)
-      .setTokenSymbol(params.tokenSymbol)
+      .setTokenSymbol(tokenSymbolToUse)
       .setTreasuryAccountId(treasuryAccId)
       .setTokenType(TokenType.NonFungibleUnique)
       .setSupplyType(params.supplyType)
@@ -207,10 +231,18 @@ export class HtsBuilder extends BaseServiceBuilder {
       const parsedKey = await this.parseKey(params.wipeKey);
       if (parsedKey) transaction.setWipeKey(parsedKey);
     }
+
     if (params.supplyKey) {
       const parsedKey = await this.parseKey(params.supplyKey);
       if (parsedKey) transaction.setSupplyKey(parsedKey);
+    } else {
+      const operator = await this.kit.getAccountInfo(treasuryAccId);
+      const key = operator?.key?.key;
+      if (key) {
+        transaction.setSupplyKey(PublicKey.fromString(key));
+      }
     }
+
     if (params.feeScheduleKey) {
       const parsedKey = await this.parseKey(params.feeScheduleKey);
       if (parsedKey) transaction.setFeeScheduleKey(parsedKey);
@@ -232,6 +264,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
+      this.addNote(`Default auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS} seconds applied for NFT collection.`);
     }
 
     this.setCurrentTransaction(transaction);
