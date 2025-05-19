@@ -188,4 +188,31 @@ export class HederaCreateFungibleTokenTool extends BaseHederaTransactionTool<
       specificArgs as unknown as FTCreateParams
     );
   }
+
+  protected override getNoteForKey(
+    key: string,
+    schemaDefaultValue: unknown,
+    actualValue: unknown
+  ): string | undefined {
+    if (key === 'decimals') {
+      return `The number of decimal places for your token was automatically set to '${actualValue}'.`;
+    }
+    if (key === 'supplyType') {
+      return `Your token's supply type was set to '${actualValue}' by default.`;
+    }
+    if (key === 'maxSupply') {
+      try {
+        const num = BigInt(String(actualValue));
+        return `A maximum supply of '${num.toLocaleString()}' for the token was set by default.`;
+      } catch {
+        return `The maximum supply for the token was set to '${actualValue}' by default.`;
+      }
+    }
+    if (key === 'freezeDefault') {
+      return `By default, accounts holding this token will ${
+        actualValue ? 'be frozen' : 'not be frozen'
+      }.`;
+    }
+    return undefined;
+  }
 }

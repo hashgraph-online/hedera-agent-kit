@@ -158,7 +158,9 @@ const NFTCreateZodSchemaCore = z.object({
     ])
     .optional()
     .default(SDKTokenSupplyType.Finite.toString())
-    .describe('Supply type: FINITE or INFINITE. NFTs typically use FINITE. Defaults to FINITE if not specified.'),
+    .describe(
+      'Supply type: FINITE or INFINITE. NFTs typically use FINITE. Defaults to FINITE if not specified.'
+    ),
   maxSupply: z
     .union([z.number(), z.string()])
     .optional()
@@ -190,5 +192,20 @@ export class HederaCreateNftTool extends BaseHederaTransactionTool<
     await (builder as HtsBuilder).createNonFungibleToken(
       specificArgs as unknown as NFTCreateParams
     );
+  }
+
+  protected override getNoteForKey(key: string, schemaDefaultValue: unknown, actualValue: unknown): string | undefined {
+    if (key === 'supplyType') {
+      return `Your NFT collection's supply type was set to '${actualValue}' by default.`;
+    }
+    if (key === 'maxSupply' && actualValue !== undefined) {
+      try {
+        const num = BigInt(String(actualValue));
+        return `A maximum supply of '${num.toLocaleString()}' for the NFT collection was set (tool schema default).`;
+      } catch {
+        return `The maximum supply for the NFT collection was set to '${actualValue}' (tool schema default).`;
+      }
+    }
+    return undefined;
   }
 }

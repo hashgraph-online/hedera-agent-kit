@@ -73,7 +73,7 @@ async function main() {
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,
-    scheduleUserTransactionsInBytesMode: false,
+    scheduleUserTransactionsInBytesMode: true,
     pluginConfig: {
       plugins: [new HelloWorldPlugin() as IPlugin],
     },
@@ -159,6 +159,10 @@ async function main() {
     const agentResponse: AgentResponse =
       await conversationalAgent.processMessage(userInput, chatHistory);
 
+    if (agentResponse.notes) {
+      console.log('Agent Notes > ', agentResponse.notes.map(note => `- ${note}`).join('\n'));
+    }
+
     console.log('Agent Message > ', agentResponse.message);
     if (agentResponse.output !== agentResponse.message) {
       console.log('Agent Tool Output (JSON) > ', agentResponse.output);
@@ -169,7 +173,7 @@ async function main() {
     });
 
     if (agentResponse.scheduleId) {
-      const scheduleIdToSign = agentResponse.schedule_id;
+      const scheduleIdToSign = agentResponse.scheduleId;
       rl.question(
         `Agent > Transaction scheduled with ID ${scheduleIdToSign}. Sign and submit with your account ${userAccountId}? (y/n): `,
         async (answer) => {

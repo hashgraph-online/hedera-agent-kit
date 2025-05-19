@@ -210,24 +210,24 @@ export class AccountBuilder extends BaseServiceBuilder {
 
     if (
       isUserInitiated &&
-      this.kit.userAccountId &&
-      this.kit.operationalMode === 'provideBytes' &&
+        this.kit.userAccountId &&
+        this.kit.operationalMode === 'provideBytes' &&
       params.transfers.length === 1
     ) {
       const receiverTransfer = params.transfers[0];
       const amountValue =
         typeof receiverTransfer.amount === 'string' ||
         typeof receiverTransfer.amount === 'number'
-          ? receiverTransfer.amount
-          : receiverTransfer.amount.toString();
+        ? receiverTransfer.amount
+        : receiverTransfer.amount.toString();
 
       const amountBigNum = new BigNumber(amountValue);
 
       if (amountBigNum.isPositive()) {
         const recipientAccountId =
           typeof receiverTransfer.accountId === 'string'
-            ? AccountId.fromString(receiverTransfer.accountId)
-            : receiverTransfer.accountId;
+          ? AccountId.fromString(receiverTransfer.accountId)
+          : receiverTransfer.accountId;
 
         const sdkHbarAmount = Hbar.fromString(amountValue.toString());
 
@@ -258,8 +258,8 @@ export class AccountBuilder extends BaseServiceBuilder {
         const amountValue =
           typeof transferInput.amount === 'string' ||
           typeof transferInput.amount === 'number'
-            ? transferInput.amount
-            : transferInput.amount.toString();
+          ? transferInput.amount
+          : transferInput.amount.toString();
 
         const sdkHbarAmount = Hbar.fromString(amountValue.toString());
 
@@ -648,7 +648,7 @@ export class AccountBuilder extends BaseServiceBuilder {
       );
 
     if (params.memo) {
-      transaction.setTransactionMemo(params.memo);
+        transaction.setTransactionMemo(params.memo);
     }
 
     this.setCurrentTransaction(transaction);

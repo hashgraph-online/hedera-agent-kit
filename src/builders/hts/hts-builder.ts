@@ -96,8 +96,8 @@ export class HtsBuilder extends BaseServiceBuilder {
       this.logger.info(
         `[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for FT creation in provideBytes mode.`
       );
-      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
-      this.addNote(`Treasury account defaulted to your account (${this.kit.userAccountId}).`);
+        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(`Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the token's treasury.`);
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -108,7 +108,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     let tokenSymbolToUse = params.tokenSymbol;
     if (!tokenSymbolToUse) {
       tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
-      this.addNote(`Token symbol defaulted to '${tokenSymbolToUse}' based on token name.`);
+      this.addNote(`We've generated a token symbol '${tokenSymbolToUse}' for you, based on the token name '${params.tokenName}'.`);
     }
 
     const transaction = new TokenCreateTransaction()
@@ -164,7 +164,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
-      this.addNote(`Default auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS} seconds applied for fungible token.`);
+      this.addNote(`A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24*60*60)} days has been set for this token.`);
     }
 
     this.setCurrentTransaction(transaction);
@@ -188,8 +188,8 @@ export class HtsBuilder extends BaseServiceBuilder {
       this.logger.info(
         `[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for NFT creation in provideBytes mode.`
       );
-      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
-      this.addNote(`Treasury account for NFT collection defaulted to your account (${this.kit.userAccountId}).`);
+        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(`Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the NFT collection's treasury.`);
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -200,7 +200,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     let tokenSymbolToUse = params.tokenSymbol;
     if (!tokenSymbolToUse) {
       tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
-      this.addNote(`NFT collection symbol defaulted to '${tokenSymbolToUse}' based on collection name.`);
+      this.addNote(`We've generated an NFT collection symbol '${tokenSymbolToUse}' for you, based on the collection name '${params.tokenName}'.`);
     }
 
     const transaction = new TokenCreateTransaction()
@@ -240,7 +240,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       const key = operator?.key?.key;
       if (key) {
         transaction.setSupplyKey(PublicKey.fromString(key));
-      }
+    }
     }
 
     if (params.feeScheduleKey) {
@@ -264,7 +264,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
-      this.addNote(`Default auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS} seconds applied for NFT collection.`);
+      this.addNote(`A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24*60*60)} days has been set for this NFT collection.`);
     }
 
     this.setCurrentTransaction(transaction);

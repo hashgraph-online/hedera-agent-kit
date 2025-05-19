@@ -84,7 +84,7 @@ interface ScheduleExecutionOptions {
 export abstract class BaseHederaTransactionTool<
   //@ts-ignore
   S extends z.ZodObject<any, any, any, any>
-  > extends StructuredTool<
+> extends StructuredTool<
   //@ts-ignore
   z.ZodObject<
     S['shape'] & { metaOptions: typeof HederaTransactionMetaOptionsSchema },
@@ -290,8 +290,7 @@ export abstract class BaseHederaTransactionTool<
 
     if (scheduleCreateResult.success && scheduleCreateResult.scheduleId) {
       const description =
-        metaOpts?.transactionMemo ||
-        `Scheduled ${this.name} operation.`;
+        metaOpts?.transactionMemo || `Scheduled ${this.name} operation.`;
 
       const userInfo = this.hederaKit.userAccountId
         ? ` User (${this.hederaKit.userAccountId}) will be payer of scheduled transaction.`
@@ -378,6 +377,17 @@ export abstract class BaseHederaTransactionTool<
   }
 
   /**
+   * Optional method for concrete tools to provide a user-friendly note for a specific Zod-defaulted parameter.
+   * @param key The key of the parameter that was defaulted by Zod.
+   * @param schemaDefaultValue The default value defined in the Zod schema for this key.
+   * @param actualValue The current/final value of the parameter after Zod parsing.
+   * @returns A user-friendly string for the note, or undefined to use a generic note.
+   */
+  protected getNoteForKey?(key: string, schemaDefaultValue: unknown, actualValue: unknown): string | undefined {
+    return undefined;
+  }
+
+  /**
    * Main method called when the tool is executed.
    * Processes arguments, calls the specific builder method, and handles
    * transaction execution based on the kit's operational mode.
@@ -390,29 +400,60 @@ export abstract class BaseHederaTransactionTool<
     const specificCallArgs = this._extractSpecificArgsFromCombinedArgs(args);
 
     this.logger.info(
-      `Executing ${this.name} with Zod-parsed specific args (schema defaults applied by LangChain):`, JSON.parse(JSON.stringify(specificCallArgs)),
-      'and metaOptions:', llmProvidedMetaOptions
+      `Executing ${this.name} with Zod-parsed specific args (schema defaults applied by LangChain):`,
+      JSON.parse(JSON.stringify(specificCallArgs)),
+      'and metaOptions:',
+      llmProvidedMetaOptions
     );
 
     const zodSchemaInfoNotes: string[] = [];
     if (this.specificInputSchema && this.specificInputSchema.shape) {
       for (const key in this.specificInputSchema.shape) {
-        if (Object.prototype.hasOwnProperty.call(this.specificInputSchema.shape, key)) {
-          const fieldSchema = this.specificInputSchema.shape[key] as z.ZodTypeAny;
+        if (
+          Object.prototype.hasOwnProperty.call(
+            this.specificInputSchema.shape,
+            key
+          )
+        ) {
+          const fieldSchema = this.specificInputSchema.shape[
+            key
+          ] as z.ZodTypeAny;
 
-          if (fieldSchema._def && (fieldSchema._def as any).typeName === 'ZodDefault') {
+          if (
+            fieldSchema._def &&
+            (fieldSchema._def as any).typeName === 'ZodDefault'
+          ) {
             const defaultValueOrFn = (fieldSchema._def as any).defaultValue;
-            let defaultValue = defaultValueOrFn;
+            let schemaDefinedDefaultValue = defaultValueOrFn;
             if (typeof defaultValueOrFn === 'function') {
-              try { defaultValue = defaultValueOrFn(); }
-              catch (eDefaultFn) {
-                this.logger.warn(`Could not execute default value function for key ${key}. Error: ${(eDefaultFn as Error).message}`);
-                defaultValue = '[dynamic schema default]';
+              try {
+                schemaDefinedDefaultValue = defaultValueOrFn();
+              } catch (eDefaultFn) {
+                this.logger.warn(
+                  `Could not execute default value function for key ${key}. Error: ${
+                    (eDefaultFn as Error).message
+                  }`
+                );
+                schemaDefinedDefaultValue = '[dynamic schema default]';
               }
             }
-            zodSchemaInfoNotes.push(
-              `Parameter '${key}' has a tool schema default of '${JSON.stringify(defaultValue)}'. Final value used: '${JSON.stringify(specificCallArgs[key as keyof typeof specificCallArgs])}'.`
-            );
+
+            const currentValue =
+              specificCallArgs[key as keyof typeof specificCallArgs];
+            let noteMessage: string | undefined;
+
+            if (this.getNoteForKey) {
+              noteMessage = this.getNoteForKey(key, schemaDefinedDefaultValue, currentValue);
+            }
+
+            if (!noteMessage) {
+              noteMessage = `For the parameter '${key}', the value '${JSON.stringify(
+                currentValue
+              )}' was used. This field has a tool schema default of '${JSON.stringify(
+                schemaDefinedDefaultValue
+              )}'.`;
+            }
+            zodSchemaInfoNotes.push(noteMessage);
           }
         }
       }
@@ -424,18 +465,33 @@ export abstract class BaseHederaTransactionTool<
       const builder = this.getServiceBuilder();
       builder.clearNotes();
 
-      await this._applyMetaOptions(builder, llmProvidedMetaOptions, specificCallArgs);
+      await this._applyMetaOptions(
+        builder,
+        llmProvidedMetaOptions,
+        specificCallArgs
+      );
       await this.callBuilderMethod(builder, specificCallArgs, runManager);
 
       const builderAppliedDefaultNotes = builder.getNotes();
-      this.logger.debug('Builder Applied Default Notes:', builderAppliedDefaultNotes);
+      this.logger.debug(
+        'Builder Applied Default Notes:',
+        builderAppliedDefaultNotes
+      );
       const allNotes = [...zodSchemaInfoNotes, ...builderAppliedDefaultNotes];
       this.logger.debug('All Notes combined:', allNotes);
 
       if (this.hederaKit.operationalMode === 'directExecution') {
-        return this._handleDirectExecution(builder, llmProvidedMetaOptions, allNotes);
+        return this._handleDirectExecution(
+          builder,
+          llmProvidedMetaOptions,
+          allNotes
+        );
       } else {
-        return this._handleProvideBytes(builder, llmProvidedMetaOptions, allNotes);
+        return this._handleProvideBytes(
+          builder,
+          llmProvidedMetaOptions,
+          allNotes
+        );
       }
     } catch (error) {
       const builder = this.getServiceBuilder();
@@ -460,8 +516,13 @@ export abstract class BaseHederaTransactionTool<
   }
 
   private _handleError(error: unknown, notes?: string[]): string {
-    const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+    const errorMessage =
+      error instanceof Error ? error.message : JSON.stringify(error);
     this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
-    return JSON.stringify({ success: false, error: errorMessage, notes: notes || [] });
+    return JSON.stringify({
+      success: false,
+      error: errorMessage,
+      notes: notes || [],
+    });
   }
 }
