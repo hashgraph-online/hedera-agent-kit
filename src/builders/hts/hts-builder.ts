@@ -32,6 +32,7 @@ import {
   CustomRoyaltyFee,
   KeyList,
   PublicKey,
+  FeeAssessmentMethod,
 } from '@hashgraph/sdk';
 
 import {
@@ -64,12 +65,208 @@ import {
 import { BaseServiceBuilder } from '../base-service-builder';
 import { Buffer } from 'buffer';
 import { HederaAgentKit } from '../../agent/agent';
+import { Logger } from '@hashgraphonline/standards-sdk';
+import { CustomFeeInputData } from '../../langchain/tools/hts/create-fungible-token-tool';
+import { BigNumber } from 'bignumber.js';
+import { AgentOperationalMode } from '../../types';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
 function generateDefaultSymbol(tokenName: string): string {
   if (!tokenName) return 'TOKEN';
-  return tokenName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 5).toUpperCase() || 'TOKEN';
+  return (
+    tokenName
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 5)
+      .toUpperCase() || 'TOKEN'
+  );
+}
+
+function mapToSdkCustomFees(
+  fees: CustomFeeInputData[],
+  parseAmountFn: (amount?: number | string | Long | BigNumber) => Long,
+  logger: Logger,
+  kitUserAccountId?: string,
+  kitOperationalMode?: AgentOperationalMode,
+  addNoteFn?: (note: string) => void
+): CustomFee[] {
+  if (!fees || fees.length === 0) return [];
+
+  return fees.map((feeData: CustomFeeInputData) => {
+    let feeCollectorStringToParse = feeData.feeCollectorAccountId;
+
+    if (
+      !feeCollectorStringToParse &&
+      kitUserAccountId &&
+      kitOperationalMode === 'provideBytes'
+    ) {
+      feeCollectorStringToParse = kitUserAccountId;
+      if (addNoteFn) {
+        let feeTypeForNote = 'custom';
+        if (feeData.type === 'FIXED' || feeData.type === 'FIXED_FEE')
+          feeTypeForNote = 'fixed';
+        else if (
+          feeData.type === 'FRACTIONAL' ||
+          feeData.type === 'FRACTIONAL_FEE'
+        )
+          feeTypeForNote = 'fractional';
+        else if (feeData.type === 'ROYALTY' || feeData.type === 'ROYALTY_FEE')
+          feeTypeForNote = 'royalty';
+        addNoteFn(
+          `Fee collector for a ${feeTypeForNote} fee was defaulted to your account (${kitUserAccountId}).`
+        );
+      }
+    }
+
+    if (!feeCollectorStringToParse) {
+      throw new Error(
+        `Fee collector account ID is required for custom fee type ${feeData.type} but was not provided or defaulted.`
+      );
+    }
+
+    let feeCollectorSdkAccountId: AccountId;
+    try {
+      feeCollectorSdkAccountId = AccountId.fromString(
+        feeCollectorStringToParse
+      );
+    } catch (e) {
+      logger.error(
+        `Invalid feeCollectorAccountId: ${feeCollectorStringToParse}`,
+        e
+      );
+      throw new Error(
+        `Invalid feeCollectorAccountId: ${feeCollectorStringToParse}`
+      );
+    }
+
+    switch (feeData.type) {
+      case 'FIXED':
+      case 'FIXED_FEE': {
+        const fixedFee = new CustomFixedFee()
+          .setFeeCollectorAccountId(feeCollectorSdkAccountId)
+          .setAmount(parseAmountFn(feeData.amount));
+        if (feeData.denominatingTokenId) {
+          try {
+            fixedFee.setDenominatingTokenId(
+              TokenId.fromString(feeData.denominatingTokenId)
+            );
+          } catch (e) {
+            logger.error(
+              `Invalid denominatingTokenId for fixed fee: ${feeData.denominatingTokenId}`,
+              e
+            );
+            throw new Error(
+              `Invalid denominatingTokenId for fixed fee: ${feeData.denominatingTokenId}`
+            );
+          }
+        }
+        return fixedFee;
+      }
+      case 'FRACTIONAL':
+      case 'FRACTIONAL_FEE': {
+        const fractionalFee = new CustomFractionalFee()
+          .setFeeCollectorAccountId(feeCollectorSdkAccountId)
+          .setNumerator(parseAmountFn(feeData.numerator).toNumber())
+          .setDenominator(parseAmountFn(feeData.denominator).toNumber());
+        if (feeData.minAmount !== undefined) {
+          fractionalFee.setMin(parseAmountFn(feeData.minAmount));
+        }
+        if (feeData.maxAmount !== undefined) {
+          fractionalFee.setMax(parseAmountFn(feeData.maxAmount));
+        }
+        const fractionalFeeData = feeData as Extract<
+          CustomFeeInputData,
+          { type: 'FRACTIONAL' | 'FRACTIONAL_FEE' }
+        >;
+        if (fractionalFeeData.assessmentMethodInclusive !== undefined) {
+          fractionalFee.setAssessmentMethod(
+            fractionalFeeData.assessmentMethodInclusive
+              ? FeeAssessmentMethod.Inclusive
+              : FeeAssessmentMethod.Exclusive
+          );
+        }
+        return fractionalFee;
+      }
+      case 'ROYALTY':
+      case 'ROYALTY_FEE': {
+        const royaltyFee = new CustomRoyaltyFee()
+          .setFeeCollectorAccountId(feeCollectorSdkAccountId)
+          .setNumerator(parseAmountFn(feeData.numerator).toNumber())
+          .setDenominator(parseAmountFn(feeData.denominator).toNumber());
+        const royaltyFeeData = feeData as Extract<
+          CustomFeeInputData,
+          { type: 'ROYALTY' | 'ROYALTY_FEE' }
+        >;
+        if (royaltyFeeData.fallbackFee) {
+          let fallbackFeeCollectorStringToParse =
+            royaltyFeeData.fallbackFee.feeCollectorAccountId;
+          if (
+            !fallbackFeeCollectorStringToParse &&
+            kitUserAccountId &&
+            kitOperationalMode === 'provideBytes'
+          ) {
+            fallbackFeeCollectorStringToParse = kitUserAccountId;
+            if (addNoteFn)
+              addNoteFn(
+                `Fallback fee collector for a royalty fee was also defaulted to your account (${kitUserAccountId}).`
+              );
+          }
+          if (!fallbackFeeCollectorStringToParse) {
+            throw new Error(
+              `Fallback fee collector account ID is required for royalty fee but was not provided or defaulted.`
+            );
+          }
+          let fallbackFeeCollectorSdkAccountId: AccountId;
+          try {
+            fallbackFeeCollectorSdkAccountId = AccountId.fromString(
+              fallbackFeeCollectorStringToParse
+            );
+          } catch (e) {
+            logger.error(
+              `Invalid feeCollectorAccountId in fallbackFee: ${fallbackFeeCollectorStringToParse}`,
+              e
+            );
+            throw new Error(
+              `Invalid feeCollectorAccountId in fallbackFee: ${fallbackFeeCollectorStringToParse}`
+            );
+          }
+          const fallback = new CustomFixedFee()
+            .setFeeCollectorAccountId(fallbackFeeCollectorSdkAccountId)
+            .setAmount(parseAmountFn(royaltyFeeData.fallbackFee.amount));
+          if (royaltyFeeData.fallbackFee.denominatingTokenId) {
+            try {
+              fallback.setDenominatingTokenId(
+                TokenId.fromString(
+                  royaltyFeeData.fallbackFee.denominatingTokenId
+                )
+              );
+            } catch (e) {
+              logger.error(
+                `Invalid denominatingTokenId in fallbackFee: ${royaltyFeeData.fallbackFee.denominatingTokenId}`,
+                e
+              );
+              throw new Error(
+                `Invalid denominatingTokenId in fallbackFee: ${royaltyFeeData.fallbackFee.denominatingTokenId}`
+              );
+            }
+          }
+          royaltyFee.setFallbackFee(fallback);
+        }
+        return royaltyFee;
+      }
+      default: {
+        const exhaustiveCheck: never = feeData;
+        logger.warn(
+          `Unsupported custom fee type encountered: ${
+            (exhaustiveCheck as any).type
+          }`
+        );
+        throw new Error(
+          `Unsupported custom fee type: ${(exhaustiveCheck as any).type}`
+        );
+      }
+    }
+  });
 }
 
 /**
@@ -96,8 +293,10 @@ export class HtsBuilder extends BaseServiceBuilder {
       this.logger.info(
         `[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for FT creation in provideBytes mode.`
       );
-        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
-      this.addNote(`Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the token's treasury.`);
+      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(
+        `Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the token's treasury.`
+      );
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -108,7 +307,35 @@ export class HtsBuilder extends BaseServiceBuilder {
     let tokenSymbolToUse = params.tokenSymbol;
     if (!tokenSymbolToUse) {
       tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
-      this.addNote(`We've generated a token symbol '${tokenSymbolToUse}' for you, based on the token name '${params.tokenName}'.`);
+      this.addNote(
+        `We've generated a token symbol '${tokenSymbolToUse}' for you, based on the token name '${params.tokenName}'.`
+      );
+    }
+
+    let sdkSupplyType: TokenSupplyType;
+    if (typeof params.supplyType === 'string') {
+      const supplyTypeString: string = params.supplyType;
+      if (
+        supplyTypeString.toUpperCase() ===
+        TokenSupplyType.Finite.toString().toUpperCase()
+      ) {
+        sdkSupplyType = TokenSupplyType.Finite;
+      } else if (
+        supplyTypeString.toUpperCase() ===
+        TokenSupplyType.Infinite.toString().toUpperCase()
+      ) {
+        sdkSupplyType = TokenSupplyType.Infinite;
+      } else {
+        this.logger.warn(
+          `Invalid string for supplyType: ${supplyTypeString}. Defaulting to INFINITE.`
+        );
+        this.addNote(
+          `Invalid supplyType string '${supplyTypeString}' received, defaulted to INFINITE.`
+        );
+        sdkSupplyType = TokenSupplyType.Infinite;
+      }
+    } else {
+      sdkSupplyType = params.supplyType;
     }
 
     const transaction = new TokenCreateTransaction()
@@ -116,11 +343,11 @@ export class HtsBuilder extends BaseServiceBuilder {
       .setTokenSymbol(tokenSymbolToUse)
       .setTreasuryAccountId(treasuryAccId)
       .setTokenType(TokenType.FungibleCommon)
-      .setSupplyType(params.supplyType)
+      .setSupplyType(sdkSupplyType)
       .setInitialSupply(this.parseAmount(params.initialSupply))
       .setDecimals(params.decimals);
 
-    if (params.supplyType === TokenSupplyType.Finite && params.maxSupply) {
+    if (sdkSupplyType === TokenSupplyType.Finite && params.maxSupply) {
       transaction.setMaxSupply(this.parseAmount(params.maxSupply));
     }
     if (params.adminKey) {
@@ -155,7 +382,15 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setTokenMemo(params.memo);
     }
     if (params.customFees && params.customFees.length > 0) {
-      transaction.setCustomFees(params.customFees);
+      const sdkCustomFees = mapToSdkCustomFees(
+        params.customFees as CustomFeeInputData[],
+        this.parseAmount.bind(this),
+        this.logger,
+        this.kit.userAccountId,
+        this.kit.operationalMode,
+        this.addNote.bind(this)
+      );
+      transaction.setCustomFees(sdkCustomFees);
     }
     if (params.autoRenewAccountId) {
       transaction.setAutoRenewAccountId(params.autoRenewAccountId);
@@ -164,7 +399,11 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
-      this.addNote(`A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24*60*60)} days has been set for this token.`);
+      this.addNote(
+        `A standard auto-renew period of ${
+          DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
+        } days has been set for this token.`
+      );
     }
 
     this.setCurrentTransaction(transaction);
@@ -188,8 +427,10 @@ export class HtsBuilder extends BaseServiceBuilder {
       this.logger.info(
         `[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for NFT creation in provideBytes mode.`
       );
-        treasuryAccId = AccountId.fromString(this.kit.userAccountId);
-      this.addNote(`Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the NFT collection's treasury.`);
+      treasuryAccId = AccountId.fromString(this.kit.userAccountId);
+      this.addNote(
+        `Since no treasury was specified, your account (${this.kit.userAccountId}) has been set as the NFT collection's treasury.`
+      );
     }
     if (!treasuryAccId) {
       throw new Error(
@@ -200,7 +441,35 @@ export class HtsBuilder extends BaseServiceBuilder {
     let tokenSymbolToUse = params.tokenSymbol;
     if (!tokenSymbolToUse) {
       tokenSymbolToUse = generateDefaultSymbol(params.tokenName);
-      this.addNote(`We've generated an NFT collection symbol '${tokenSymbolToUse}' for you, based on the collection name '${params.tokenName}'.`);
+      this.addNote(
+        `We've generated an NFT collection symbol '${tokenSymbolToUse}' for you, based on the collection name '${params.tokenName}'.`
+      );
+    }
+
+    let sdkSupplyType: TokenSupplyType;
+    if (typeof params.supplyType === 'string') {
+      const supplyTypeString: string = params.supplyType;
+      if (
+        supplyTypeString.toUpperCase() ===
+        TokenSupplyType.Finite.toString().toUpperCase()
+      ) {
+        sdkSupplyType = TokenSupplyType.Finite;
+      } else if (
+        supplyTypeString.toUpperCase() ===
+        TokenSupplyType.Infinite.toString().toUpperCase()
+      ) {
+        sdkSupplyType = TokenSupplyType.Infinite;
+      } else {
+        this.logger.warn(
+          `Invalid string for NFT supplyType: ${supplyTypeString}. Defaulting to FINITE as per NFT common practice.`
+        );
+        this.addNote(
+          `Invalid supplyType string '${supplyTypeString}' received for NFT, defaulted to FINITE.`
+        );
+        sdkSupplyType = TokenSupplyType.Finite;
+      }
+    } else {
+      sdkSupplyType = params.supplyType;
     }
 
     const transaction = new TokenCreateTransaction()
@@ -208,12 +477,19 @@ export class HtsBuilder extends BaseServiceBuilder {
       .setTokenSymbol(tokenSymbolToUse)
       .setTreasuryAccountId(treasuryAccId)
       .setTokenType(TokenType.NonFungibleUnique)
-      .setSupplyType(params.supplyType)
+      .setSupplyType(sdkSupplyType)
       .setInitialSupply(0)
       .setDecimals(0);
 
-    if (params.supplyType === TokenSupplyType.Finite && params.maxSupply) {
+    if (sdkSupplyType === TokenSupplyType.Finite && params.maxSupply) {
       transaction.setMaxSupply(this.parseAmount(params.maxSupply));
+    } else if (sdkSupplyType === TokenSupplyType.Finite && !params.maxSupply) {
+      this.logger.warn(
+        'NFT supplyType is FINITE but no maxSupply was provided. This might lead to an unmintable token or undesired SDK default. Consider prompting user for maxSupply or setting a builder default.'
+      );
+      this.addNote(
+        'For this FINITE NFT collection, a specific maximum supply was not provided. The Hedera network might apply its own default or limit minting.'
+      );
     }
     if (params.adminKey) {
       const parsedKey = await this.parseKey(params.adminKey);
@@ -240,7 +516,7 @@ export class HtsBuilder extends BaseServiceBuilder {
       const key = operator?.key?.key;
       if (key) {
         transaction.setSupplyKey(PublicKey.fromString(key));
-    }
+      }
     }
 
     if (params.feeScheduleKey) {
@@ -255,7 +531,15 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setTokenMemo(params.memo);
     }
     if (params.customFees && params.customFees.length > 0) {
-      transaction.setCustomFees(params.customFees);
+      const sdkCustomFees = mapToSdkCustomFees(
+        params.customFees as unknown as CustomFeeInputData[],
+        this.parseAmount.bind(this),
+        this.logger,
+        this.kit.userAccountId,
+        this.kit.operationalMode,
+        this.addNote.bind(this)
+      );
+      transaction.setCustomFees(sdkCustomFees);
     }
     if (params.autoRenewAccountId) {
       transaction.setAutoRenewAccountId(params.autoRenewAccountId);
@@ -264,7 +548,11 @@ export class HtsBuilder extends BaseServiceBuilder {
       transaction.setAutoRenewPeriod(params.autoRenewPeriod);
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
-      this.addNote(`A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24*60*60)} days has been set for this NFT collection.`);
+      this.addNote(
+        `A standard auto-renew period of ${
+          DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
+        } days has been set for this NFT collection.`
+      );
     }
 
     this.setCurrentTransaction(transaction);
@@ -717,58 +1005,21 @@ export class HtsBuilder extends BaseServiceBuilder {
    * @param {TokenFeeScheduleUpdateParams} params
    * @returns {this}
    */
-  public feeScheduleUpdate(params: TokenFeeScheduleUpdateParams): this {
+  public async feeScheduleUpdate(
+    params: TokenFeeScheduleUpdateParams
+  ): Promise<this> {
+    this.clearNotes();
     if (!params.tokenId) {
       throw new Error('Token ID is required to update fee schedule.');
     }
-
-    const sdkCustomFees: CustomFee[] = params.customFees.map((feeData: any) => {
-      const feeCollectorAccountId = AccountId.fromString(
-        feeData.feeCollectorAccountId
-      );
-
-      if (feeData.type === 'FIXED') {
-        const fixedFee = new CustomFixedFee()
-          .setFeeCollectorAccountId(feeCollectorAccountId)
-          .setAmount(this.parseAmount(feeData.amount));
-        if (feeData.denominatingTokenId) {
-          fixedFee.setDenominatingTokenId(
-            TokenId.fromString(feeData.denominatingTokenId)
-          );
-        }
-        return fixedFee;
-      } else if (feeData.type === 'FRACTIONAL') {
-        const fractionalFee = new CustomFractionalFee()
-          .setFeeCollectorAccountId(feeCollectorAccountId)
-          .setNumerator(this.parseAmount(feeData.numerator))
-          .setDenominator(this.parseAmount(feeData.denominator));
-        if (feeData.assessmentMethodInclusive !== undefined) {
-          fractionalFee.setAssessmentMethod(feeData.assessmentMethodInclusive);
-        }
-        return fractionalFee;
-      } else if (feeData.type === 'ROYALTY') {
-        const royaltyFee = new CustomRoyaltyFee()
-          .setFeeCollectorAccountId(feeCollectorAccountId)
-          .setNumerator(this.parseAmount(feeData.numerator))
-          .setDenominator(this.parseAmount(feeData.denominator));
-        if (feeData.fallbackFee) {
-          const fallback = new CustomFixedFee()
-            .setFeeCollectorAccountId(
-              AccountId.fromString(feeData.fallbackFee.feeCollectorAccountId)
-            )
-            .setAmount(this.parseAmount(feeData.fallbackFee.amount));
-          if (feeData.fallbackFee.denominatingTokenId) {
-            fallback.setDenominatingTokenId(
-              TokenId.fromString(feeData.fallbackFee.denominatingTokenId)
-            );
-          }
-          royaltyFee.setFallbackFee(fallback);
-        }
-        return royaltyFee;
-      }
-      throw new Error(`Unsupported custom fee type: ${feeData.type}`);
-    });
-
+    const sdkCustomFees = mapToSdkCustomFees(
+      params.customFees as unknown as CustomFeeInputData[],
+      this.parseAmount.bind(this),
+      this.logger,
+      this.kit.userAccountId,
+      this.kit.operationalMode,
+      this.addNote.bind(this)
+    );
     const transaction = new TokenFeeScheduleUpdateTransaction()
       .setTokenId(
         typeof params.tokenId === 'string'

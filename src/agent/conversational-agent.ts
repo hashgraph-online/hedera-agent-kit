@@ -173,7 +173,7 @@ export class HederaConversationalAgent {
       if (this.config.scheduleUserTransactionsInBytesMode && userAccId) {
         messageParts.push(
           `\nOPERATIONAL MODE: 'provideBytes' with scheduled transactions for user actions. ` +
-            `When a user asks for a transaction to be prepared (e.g., creating a token, transferring assets for them to sign), ` +
+            `When a user asks for a transaction to be prepared (e.g., creating a token, topic, transferring assets for them to sign, etc), ` +
             `you MUST default to creating a Scheduled Transaction using the appropriate tool with the metaOption 'schedule: true'. ` +
             `The user (with account ID ${userAccId}) will be the one to ultimately pay for and (if needed) sign the inner transaction. ` +
             `Your operator account (${agentOperatorId}) will pay for creating the schedule entity itself. ` +

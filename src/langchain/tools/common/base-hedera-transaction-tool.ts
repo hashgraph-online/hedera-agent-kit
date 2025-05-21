@@ -383,7 +383,11 @@ export abstract class BaseHederaTransactionTool<
    * @param actualValue The current/final value of the parameter after Zod parsing.
    * @returns A user-friendly string for the note, or undefined to use a generic note.
    */
-  protected getNoteForKey?(key: string, schemaDefaultValue: unknown, actualValue: unknown): string | undefined {
+  protected getNoteForKey?(
+    key: string,
+    schemaDefaultValue: unknown,
+    actualValue: unknown
+  ): string | undefined {
     return undefined;
   }
 
@@ -443,7 +447,11 @@ export abstract class BaseHederaTransactionTool<
             let noteMessage: string | undefined;
 
             if (this.getNoteForKey) {
-              noteMessage = this.getNoteForKey(key, schemaDefinedDefaultValue, currentValue);
+              noteMessage = this.getNoteForKey(
+                key,
+                schemaDefinedDefaultValue,
+                currentValue
+              );
             }
 
             if (!noteMessage) {

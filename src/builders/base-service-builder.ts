@@ -125,7 +125,6 @@ export abstract class BaseServiceBuilder {
    * @param {boolean} [options.schedule]
    * @param {string} [options.scheduleMemo]
    * @param {string | AccountId} [options.schedulePayerAccountId]
-   * @param {Key} [options.scheduleAdminKey]
    * @returns {Promise<ExecuteResult>}
    * @throws {Error}
    */
@@ -134,77 +133,122 @@ export abstract class BaseServiceBuilder {
     scheduleMemo?: string;
     schedulePayerAccountId?: string | AccountId;
   }): Promise<ExecuteResult> {
-    const innerTransaction = this.currentTransaction;
+    const innerTx = this.currentTransaction;
 
-    if (!innerTransaction) {
-      return {
-        success: false,
-        error:
-          'No transaction to execute. Call a specific transaction method first.',
-      };
+    if (!innerTx) {
+      return { success: false, error: 'No transaction to execute.' };
     }
 
-    let transactionToExecute: Transaction = innerTransaction;
-    let originalTransactionIdForReporting =
-      innerTransaction.transactionId?.toString();
+    let transactionToExecute: Transaction = innerTx;
+    let originalTransactionIdForReporting = innerTx.transactionId?.toString();
 
     if (options?.schedule) {
-      const scheduleCreateTx =
-        new ScheduleCreateTransaction().setScheduledTransaction(
-          innerTransaction
+      if (!innerTx.isFrozen() && this.kit.userAccountId) {
+        innerTx.setTransactionId(
+          TransactionId.generate(this.kit.userAccountId)
         );
+      }
+
+      const scheduleCreateTx =
+        new ScheduleCreateTransaction().setScheduledTransaction(innerTx);
 
       if (options.scheduleMemo) {
         scheduleCreateTx.setScheduleMemo(options.scheduleMemo);
       }
-      if (options.schedulePayerAccountId) {
-        const payerAccountId =
+
+      if (this.kit.userAccountId) {
+        scheduleCreateTx.setPayerAccountId(
+          AccountId.fromString(this.kit.userAccountId)
+        );
+      } else if (options.schedulePayerAccountId) {
+        const payerForScheduleCreate =
           typeof options.schedulePayerAccountId === 'string'
             ? AccountId.fromString(options.schedulePayerAccountId)
             : options.schedulePayerAccountId;
-        scheduleCreateTx.setPayerAccountId(payerAccountId);
+        scheduleCreateTx.setPayerAccountId(payerForScheduleCreate);
+      } else {
+        scheduleCreateTx.setPayerAccountId(this.kit.signer.getAccountId());
+        this.addNote(
+          `Your agent account (${this.kit.signer
+            .getAccountId()
+            .toString()}) will pay the fee to create this schedule.`
+        );
       }
-      const currentAccount = await this.kit.getOperator();
-      const thresholdKey = new KeyList().setThreshold(1);
 
-      if (currentAccount.publicKey) {
-        thresholdKey.push(currentAccount.publicKey);
+      const agentOperator = await this.kit.getOperator();
+      const adminKeyList = new KeyList().setThreshold(1);
+      if (agentOperator.publicKey) {
+        adminKeyList.push(agentOperator.publicKey);
+        this.addNote(
+          `The schedule admin key allows both your agent and user (${this.kit.userAccountId}) to manage the schedule.`
+        );
       }
 
       if (this.kit.userAccountId) {
-        const userResponse = await this.kit.getAccountInfo(
-          AccountId.fromString(this.kit.userAccountId)
-        );
-        if (userResponse?.key?.key) {
-          thresholdKey.push(PublicKey.fromString(userResponse.key.key));
+        try {
+          const userAccountInfo = await this.kit.getAccountInfo(
+            AccountId.fromString(this.kit.userAccountId)
+          );
+          if (userAccountInfo?.key?.key) {
+            adminKeyList.push(PublicKey.fromString(userAccountInfo.key.key));
+            this.addNote(
+              `The schedule admin key allows both your agent and user (${this.kit.userAccountId}) to manage the schedule.`
+            );
+          } else {
+            this.addNote(
+              `The schedule admin key is set to your agent. User (${this.kit.userAccountId}) key not found or not a single key.`
+            );
+          }
+        } catch (e) {
+          this.logger.warn(
+            `Failed to get user key for schedule admin key for ${
+              this.kit.userAccountId
+            }: ${(e as Error).message}`
+          );
+          this.addNote(
+            `The schedule admin key is set to your agent. Could not retrieve user (${this.kit.userAccountId}) key.`
+          );
         }
       }
-
-      scheduleCreateTx.setAdminKey(thresholdKey);
+      if (Array.from(adminKeyList).length > 0) {
+        scheduleCreateTx.setAdminKey(adminKeyList);
+      } else {
+        this.addNote(
+          'No admin key could be set for the schedule (agent key missing and user key not found/retrieved).'
+        );
+      }
 
       transactionToExecute = scheduleCreateTx;
-      if (!transactionToExecute.transactionId) {
-        await transactionToExecute.freezeWith(this.kit.client);
-      }
-      originalTransactionIdForReporting =
-        transactionToExecute.transactionId?.toString();
     }
 
     try {
+      if (
+        !transactionToExecute.isFrozen() &&
+        !transactionToExecute.transactionId
+      ) {
+        await transactionToExecute.freezeWith(this.kit.client);
+      }
+      if (options?.schedule && transactionToExecute.transactionId) {
+        originalTransactionIdForReporting =
+          transactionToExecute.transactionId.toString();
+      }
+
       const receipt = await this.kit.signer.signAndExecuteTransaction(
         transactionToExecute
       );
+      const finalTransactionId =
+        transactionToExecute.transactionId?.toString() ||
+        originalTransactionIdForReporting;
 
       const result: ExecuteResult = {
         success: true,
         receipt: receipt,
-        transactionId: originalTransactionIdForReporting,
+        transactionId: finalTransactionId,
       };
 
       if (options?.schedule && receipt.scheduleId) {
         result.scheduleId = receipt.scheduleId.toString();
       }
-
       return result;
     } catch (e: unknown) {
       console.log('error is:', e);

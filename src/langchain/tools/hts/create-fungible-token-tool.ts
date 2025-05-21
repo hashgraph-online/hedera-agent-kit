@@ -9,8 +9,8 @@ import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 import { HtsBuilder } from '../../../builders/hts/hts-builder';
 
 const FixedFeeInputSchema = z.object({
-  type: z.literal('FIXED'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  type: z.enum(['FIXED', 'FIXED_FEE']),
+  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
   denominatingTokenId: z
     .string()
     .optional()
@@ -21,8 +21,8 @@ const FixedFeeInputSchema = z.object({
 });
 
 const FractionalFeeInputSchema = z.object({
-  type: z.literal('FRACTIONAL'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  type: z.enum(['FRACTIONAL', 'FRACTIONAL_FEE']),
+  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
   numerator: z.number().int().describe('Numerator of the fractional fee.'),
   denominator: z
     .number()
@@ -44,8 +44,8 @@ const FractionalFeeInputSchema = z.object({
 });
 
 const RoyaltyFeeInputSchema = z.object({
-  type: z.literal('ROYALTY'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  type: z.enum(['ROYALTY', 'ROYALTY_FEE']),
+  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
   numerator: z.number().int().describe('Numerator of the royalty fee.'),
   denominator: z
     .number()
@@ -62,6 +62,8 @@ const CustomFeeInputUnionSchema = z.discriminatedUnion('type', [
   FractionalFeeInputSchema,
   RoyaltyFeeInputSchema,
 ]);
+
+export type CustomFeeInputData = z.infer<typeof CustomFeeInputUnionSchema>;
 
 const FTCreateZodSchemaCore = z.object({
   tokenName: z.string().describe('The publicly visible name of the token.'),
