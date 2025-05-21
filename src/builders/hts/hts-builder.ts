@@ -67,19 +67,22 @@ import { Buffer } from 'buffer';
 import { HederaAgentKit } from '../../agent/agent';
 import { Logger } from '@hashgraphonline/standards-sdk';
 import { CustomFeeInputData } from '../../langchain/tools/hts/create-fungible-token-tool';
-import { BigNumber } from 'bignumber.js';
 import { AgentOperationalMode } from '../../types';
 
 const DEFAULT_AUTORENEW_PERIOD_SECONDS = 7776000;
 
 function generateDefaultSymbol(tokenName: string): string {
-  if (!tokenName) return 'TOKEN';
-  return (
-    tokenName
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .substring(0, 5)
-      .toUpperCase() || 'TOKEN'
-  );
+  if (!tokenName) {
+    return 'TOKEN';
+  }
+  const symbol = tokenName
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 5)
+    .toUpperCase();
+  if (symbol) {
+    return symbol;
+  }
+  return 'TOKEN';
 }
 
 function mapToSdkCustomFees(
@@ -90,7 +93,9 @@ function mapToSdkCustomFees(
   kitOperationalMode?: AgentOperationalMode,
   addNoteFn?: (note: string) => void
 ): CustomFee[] {
-  if (!fees || fees.length === 0) return [];
+  if (!fees || fees.length === 0) {
+    return [];
+  }
 
   return fees.map((feeData: CustomFeeInputData) => {
     let feeCollectorStringToParse = feeData.feeCollectorAccountId;
@@ -103,15 +108,13 @@ function mapToSdkCustomFees(
       feeCollectorStringToParse = kitUserAccountId;
       if (addNoteFn) {
         let feeTypeForNote = 'custom';
-        if (feeData.type === 'FIXED' || feeData.type === 'FIXED_FEE')
+        if (feeData.type === 'FIXED' || feeData.type === 'FIXED_FEE') {
           feeTypeForNote = 'fixed';
-        else if (
-          feeData.type === 'FRACTIONAL' ||
-          feeData.type === 'FRACTIONAL_FEE'
-        )
+        } else if (feeData.type === 'FRACTIONAL' || feeData.type === 'FRACTIONAL_FEE') {
           feeTypeForNote = 'fractional';
-        else if (feeData.type === 'ROYALTY' || feeData.type === 'ROYALTY_FEE')
+        } else if (feeData.type === 'ROYALTY' || feeData.type === 'ROYALTY_FEE') {
           feeTypeForNote = 'royalty';
+        }
         addNoteFn(
           `Fee collector for a ${feeTypeForNote} fee was defaulted to your account (${kitUserAccountId}).`
         );
@@ -179,11 +182,11 @@ function mapToSdkCustomFees(
           { type: 'FRACTIONAL' | 'FRACTIONAL_FEE' }
         >;
         if (fractionalFeeData.assessmentMethodInclusive !== undefined) {
-          fractionalFee.setAssessmentMethod(
-            fractionalFeeData.assessmentMethodInclusive
-              ? FeeAssessmentMethod.Inclusive
-              : FeeAssessmentMethod.Exclusive
-          );
+          if (fractionalFeeData.assessmentMethodInclusive) {
+            fractionalFee.setAssessmentMethod(FeeAssessmentMethod.Inclusive);
+          } else {
+            fractionalFee.setAssessmentMethod(FeeAssessmentMethod.Exclusive);
+          }
         }
         return fractionalFee;
       }
@@ -206,10 +209,11 @@ function mapToSdkCustomFees(
             kitOperationalMode === 'provideBytes'
           ) {
             fallbackFeeCollectorStringToParse = kitUserAccountId;
-            if (addNoteFn)
+            if (addNoteFn) {
               addNoteFn(
                 `Fallback fee collector for a royalty fee was also defaulted to your account (${kitUserAccountId}).`
               );
+            }
           }
           if (!fallbackFeeCollectorStringToParse) {
             throw new Error(
@@ -383,7 +387,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     }
     if (params.customFees && params.customFees.length > 0) {
       const sdkCustomFees = mapToSdkCustomFees(
-        params.customFees as CustomFeeInputData[],
+        params.customFees as unknown as CustomFeeInputData[],
         this.parseAmount.bind(this),
         this.logger,
         this.kit.userAccountId,
