@@ -56,7 +56,9 @@ dotenv.config();
  * @returns {Tool[]} An array of LangChain Tool instances.
  */
 export async function createHederaTools(
-  hederaKit: HederaAgentKit
+  hederaKit: HederaAgentKit,
+  operatorId?: string,
+  operatorKey?: PrivateKey
 ): Promise<StructuredTool[]> {
   const toolParams: BaseHederaTransactionToolParams = {
     hederaKit,
@@ -109,26 +111,24 @@ export async function createHederaTools(
   ];
 
   try {
-    const operatorData = await hederaKit.getOperator();
+
     let operatorKeyForStandards: PrivateKey | undefined;
-    if (process.env.HEDERA_PRIVATE_KEY) {
-      operatorKeyForStandards = PrivateKey.fromString(
-        process.env.HEDERA_PRIVATE_KEY
-      );
+    if (operatorKey) {
+      operatorKeyForStandards = operatorKey;
     } else {
       hederaKit.logger.warn(
         'HEDERA_PRIVATE_KEY not found in env, HCS-10 tools might not initialize if signer does not expose private key directly.'
       );
     }
 
-    if (operatorData.id && operatorKeyForStandards) {
+    if (operatorId && operatorKeyForStandards) {
       const networkTypeForStandards =
         hederaKit.network === 'mainnet' ? 'mainnet' : 'testnet';
 
       const standardsKit = initializeHCS10Client({
         clientConfig: {
-          operatorId: operatorData.id.toString(),
-          operatorKey: operatorKeyForStandards.toStringRaw(),
+          operatorId: operatorId,
+          operatorKey: operatorKeyForStandards?.toStringRaw() || '',
           network: networkTypeForStandards,
           useEncryption: false,
         },

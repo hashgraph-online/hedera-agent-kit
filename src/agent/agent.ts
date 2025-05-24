@@ -10,9 +10,7 @@ import {
   ScheduleSignTransaction,
   ScheduleId,
 } from '@hashgraph/sdk';
-import {
-  AbstractSigner,
-} from '../signer/abstract-signer';
+import { AbstractSigner } from '../signer/abstract-signer';
 import {
   Airdrop,
   HCSMessage,
@@ -162,7 +160,13 @@ export class HederaAgentKit {
       }
     }
 
-    const coreKitTools = await createHederaTools(this);
+    const signerAccountId = this.signer?.getAccountId()?.toString();
+    const signerPrivateKey = this.signer?.getOperatorPrivateKey();
+    const coreKitTools = await createHederaTools(
+      this,
+      signerAccountId,
+      signerPrivateKey
+    );
     const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
       return plugin.getTools();
     }) as unknown as Tool[];
