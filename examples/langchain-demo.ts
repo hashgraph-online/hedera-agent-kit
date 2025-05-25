@@ -225,7 +225,8 @@ async function main() {
   }
 
   function askQuestion() {
-    rl.question('User > ', async (input) => {
+    setTimeout(() => {
+      rl.question('User > ', async (input) => {
       if (input.toLowerCase() === 'exit') {
         rl.close();
         console.log('\nInteractive demo finished.');
@@ -250,6 +251,7 @@ async function main() {
         askQuestion();
       }
     });
+    }, 100);
   }
   askQuestion();
 }
