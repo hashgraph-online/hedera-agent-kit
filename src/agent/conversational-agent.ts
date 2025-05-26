@@ -11,7 +11,7 @@ import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
 import { TransactionReceipt } from '@hashgraph/sdk';
 import { StructuredTool } from '@langchain/core/tools';
-import { AgentOperationalMode } from '../types';
+import { AgentOperationalMode, MirrorNodeConfig } from '../types';
 import { ModelCapability } from '../types/model-capability';
 import { ModelCapabilityDetector } from '../utils/model-capability-detector';
 
@@ -30,6 +30,7 @@ export interface HederaConversationalAgentConfig {
   openAIModelName?: string;
   scheduleUserTransactionsInBytesMode?: boolean;
   modelCapability?: ModelCapability;
+  mirrorNodeConfig?: MirrorNodeConfig;
 }
 
 /**
@@ -126,7 +127,8 @@ export class HederaConversationalAgent {
       initialModelCapability,
       this.config.openAIModelName ||
         process.env.OPENAI_MODEL_NAME ||
-        'gpt-4o-mini'
+        'gpt-4o-mini',
+      this.config.mirrorNodeConfig
     );
 
     if (this.config.llm) {

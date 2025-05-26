@@ -50,6 +50,35 @@ export {
 export type AgentOperationalMode = 'directExecution' | 'provideBytes';
 export type HederaNetworkType = 'mainnet' | 'testnet';
 
+/**
+ * Configuration for custom mirror node providers.
+ *
+ * @example
+ * // Using HGraph with API key in URL
+ * const config = {
+ *   customUrl: 'https://mainnet.hedera.api.hgraph.dev/v1/<API-KEY>',
+ *   apiKey: 'your-api-key-here'
+ * };
+ *
+ * @example
+ * // Using custom provider with API key in headers
+ * const config = {
+ *   customUrl: 'https://custom-mirror-node.com',
+ *   apiKey: 'your-api-key',
+ *   headers: {
+ *     'X-Custom-Header': 'value'
+ *   }
+ * };
+ */
+export interface MirrorNodeConfig {
+  /** Custom mirror node URL. Can include <API-KEY> placeholder for URL-based API keys. */
+  customUrl?: string;
+  /** API key for authentication. Will be used in both Authorization header and URL replacement. */
+  apiKey?: string;
+  /** Additional custom headers to include with requests. */
+  headers?: Record<string, string>;
+}
+
 export type TokenBalance = {
   account: string;
   balance: number;

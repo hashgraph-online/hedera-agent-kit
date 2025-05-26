@@ -12,6 +12,7 @@ import {
   SignScheduledTransactionParams,
   AgentOperationalMode,
   HederaNetworkType,
+  MirrorNodeConfig,
 } from '../types';
 import { HederaMirrorNode, Logger } from '@hashgraphonline/standards-sdk';
 import {
@@ -65,7 +66,8 @@ export class HederaAgentKit {
     userAccountId?: string,
     scheduleUserTransactionsInBytesMode: boolean = true,
     modelCapability: ModelCapability = ModelCapability.MEDIUM,
-    modelName?: string
+    modelName?: string,
+    mirrorNodeConfig?: MirrorNodeConfig
   ) {
     this.signer = signer;
     this.network = this.signer.getNetwork();
@@ -91,7 +93,8 @@ export class HederaAgentKit {
       new Logger({
         level: 'info',
         module: 'HederaAgentKit-MirrorNode',
-      })
+      }),
+      mirrorNodeConfig
     );
 
     this.pluginConfigInternal = pluginConfigInput;

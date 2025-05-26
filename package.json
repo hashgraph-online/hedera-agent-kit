@@ -1,6 +1,6 @@
 {
   "name": "@hashgraphonline/hedera-agent-kit",
-  "version": "0.0.18-canary.12",
+  "version": "0.0.18",
   "type": "module",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.js",
