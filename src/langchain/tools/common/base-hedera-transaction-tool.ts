@@ -99,6 +99,7 @@ export abstract class BaseHederaTransactionTool<
   protected neverScheduleThisTool: boolean = false;
 
   abstract specificInputSchema: S;
+  abstract namespace: string;
 
   //@ts-ignore: Ignoring complex type compatibility issues
   get schema(): this['lc_kwargs']['schema'] {
@@ -384,8 +385,11 @@ export abstract class BaseHederaTransactionTool<
    * @returns A user-friendly string for the note, or undefined to use a generic note.
    */
   protected getNoteForKey?(
+    //eslint-disable-next-line @typescript-eslint/no-unused-vars
     key: string,
+    //eslint-disable-next-line @typescript-eslint/no-unused-vars
     schemaDefaultValue: unknown,
+    //eslint-disable-next-line @typescript-eslint/no-unused-vars
     actualValue: unknown
   ): string | undefined {
     return undefined;

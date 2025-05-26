@@ -37,6 +37,7 @@ export class HederaWipeTokenAccountTool extends BaseHederaTransactionTool<
   description =
     "Wipes tokens (fungible or non-fungible) from an account. Provide 'amount' for FTs or 'serials' for NFTs. Builder validates inputs.";
   specificInputSchema = WipeTokenAccountZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

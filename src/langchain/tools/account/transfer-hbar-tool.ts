@@ -35,6 +35,7 @@ export class HederaTransferHbarTool extends BaseHederaTransactionTool<
   description =
     'Transfers HBAR between accounts. Builder validates amounts and sum.';
   specificInputSchema = TransferHbarZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

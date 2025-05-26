@@ -45,6 +45,7 @@ export class HederaSubmitMessageTool extends BaseHederaTransactionTool<
   description =
     'Submits a message to a Hedera Consensus Service (HCS) topic. The builder handles chunking and base64 decoding for binary messages.';
   specificInputSchema = SubmitMessageZodSchemaCore;
+  namespace = 'hcs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

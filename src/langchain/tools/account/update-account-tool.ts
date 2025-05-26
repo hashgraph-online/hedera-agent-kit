@@ -39,6 +39,7 @@ export class HederaUpdateAccountTool extends BaseHederaTransactionTool<
   description =
     'Updates an existing Hedera account. Specify accountIdToUpdate and fields to change. Builder handles parsing and clearing logic.';
   specificInputSchema = UpdateAccountZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

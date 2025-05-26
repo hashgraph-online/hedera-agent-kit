@@ -22,6 +22,7 @@ export class HederaUnfreezeTokenAccountTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-unfreeze-token-account';
   description = 'Unfreezes an account for a specific token.';
   specificInputSchema = UnfreezeTokenAccountZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -33,6 +33,7 @@ export class HederaMintNftTool extends BaseHederaTransactionTool<
   description =
     'Mints new Non-Fungible Tokens (NFTs). Builder handles metadata decoding and batching.';
   specificInputSchema = MintNFTZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -186,7 +186,7 @@ export abstract class BaseServiceBuilder {
 
       if (this.kit.userAccountId) {
         try {
-          const userAccountInfo = await this.kit.getAccountInfo(
+          const userAccountInfo = await this.kit.query().getAccountInfo(
             AccountId.fromString(this.kit.userAccountId)
           );
           if (userAccountInfo?.key?.key) {

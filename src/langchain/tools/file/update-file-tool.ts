@@ -38,6 +38,7 @@ export class HederaUpdateFileTool extends BaseHederaTransactionTool<
   description =
     "Updates a file's attributes (contents, keys, memo). Builder handles parsing and clearing logic.";
   specificInputSchema = UpdateFileZodSchemaCore;
+  namespace = 'file';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

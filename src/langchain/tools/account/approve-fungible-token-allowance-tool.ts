@@ -33,6 +33,7 @@ export class HederaApproveFungibleTokenAllowanceTool extends BaseHederaTransacti
   description =
     'Approves a fungible token allowance for a spender. Builder handles amount conversion.';
   specificInputSchema = ApproveFungibleTokenAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

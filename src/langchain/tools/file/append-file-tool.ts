@@ -39,6 +39,7 @@ export class HederaAppendFileTool extends BaseHederaTransactionTool<
   description =
     'Appends content to a file. Builder handles content decoding and chunking.';
   specificInputSchema = AppendFileZodSchemaCore;
+  namespace = 'file';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

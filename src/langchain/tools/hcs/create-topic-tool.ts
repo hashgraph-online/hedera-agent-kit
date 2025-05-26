@@ -79,6 +79,7 @@ export class HederaCreateTopicTool extends BaseHederaTransactionTool<
   description =
     'Creates a new Hedera Consensus Service (HCS) topic. Provide parameters as needed. The builder handles defaults and key parsing.';
   specificInputSchema = CreateTopicZodSchemaCore;
+  namespace = 'hcs';
 
   /**
    *  Topic Creation cannot be scheduled yet.

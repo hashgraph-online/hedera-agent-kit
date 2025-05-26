@@ -12,6 +12,8 @@ import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
 import { TransactionReceipt } from '@hashgraph/sdk';
 import { StructuredTool } from '@langchain/core/tools';
 import { AgentOperationalMode } from '../types';
+import { ModelCapability } from '../types/model-capability';
+import { ModelCapabilityDetector } from '../utils/model-capability-detector';
 
 /**
  * Configuration for the HederaConversationalAgent.
@@ -27,6 +29,7 @@ export interface HederaConversationalAgentConfig {
   openAIApiKey?: string;
   openAIModelName?: string;
   scheduleUserTransactionsInBytesMode?: boolean;
+  modelCapability?: ModelCapability;
 }
 
 /**
@@ -103,6 +106,12 @@ export class HederaConversationalAgent {
       scheduleUserTransactionsInBytesMode: true,
       ...config,
     };
+
+    const initialModelCapability =
+      this.config.modelCapability ||
+      ModelCapabilityDetector.getInstance().getModelCapabilitySync(
+        config.openAIModelName
+      );
     this.logger = new StandardsSdkLogger({
       level: this.config.verbose ? 'debug' : 'info',
       module: 'HederaConversationalAgent',
@@ -113,7 +122,11 @@ export class HederaConversationalAgent {
       this.config.pluginConfig,
       this.config.operationalMode,
       this.config.userAccountId,
-      this.config.scheduleUserTransactionsInBytesMode
+      this.config.scheduleUserTransactionsInBytesMode,
+      initialModelCapability,
+      this.config.openAIModelName ||
+        process.env.OPENAI_MODEL_NAME ||
+        'gpt-4o-mini'
     );
 
     if (this.config.llm) {
@@ -207,6 +220,17 @@ export class HederaConversationalAgent {
    * Must be called before `processMessage`.
    */
   public async initialize(): Promise<void> {
+    const detectedCapability =
+      await ModelCapabilityDetector.getInstance().getModelCapability(
+        this.config.openAIModelName
+      );
+    if (detectedCapability !== this.hederaKit.modelCapability) {
+      this.hederaKit.modelCapability = detectedCapability;
+      this.logger.info(
+        `Updated model capability to ${detectedCapability} after API fetch`
+      );
+    }
+
     await this.hederaKit.initialize();
     this.systemMessage = this.constructSystemMessage();
     const toolsFromKit = this.hederaKit.getAggregatedLangChainTools();
@@ -215,6 +239,11 @@ export class HederaConversationalAgent {
         'No tools were loaded into HederaAgentKit. The agent may not function correctly.'
       );
     }
+
+    this.logger.info(
+      `Loaded ${toolsFromKit.length} tools for model capability: ${this.hederaKit.modelCapability}`
+    );
+
     const prompt = ChatPromptTemplate.fromMessages([
       ['system', this.systemMessage],
       new MessagesPlaceholder('chat_history'),

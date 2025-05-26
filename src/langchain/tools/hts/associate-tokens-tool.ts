@@ -23,6 +23,7 @@ export class HederaAssociateTokensTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-associate-tokens';
   description = 'Associates one or more Hedera tokens with an account.';
   specificInputSchema = AssociateTokensZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

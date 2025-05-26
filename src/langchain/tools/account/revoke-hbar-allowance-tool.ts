@@ -29,6 +29,7 @@ export class HederaRevokeHbarAllowanceTool extends BaseHederaTransactionTool<
   description =
     'Revokes/clears an HBAR allowance for a specific spender by approving zero HBAR.';
   specificInputSchema = RevokeHbarAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

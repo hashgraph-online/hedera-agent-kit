@@ -26,6 +26,7 @@ export class HederaBurnNftTool extends BaseHederaTransactionTool<
   description =
     'Burns Non-Fungible Tokens (NFTs). Requires token ID and an array of serial numbers.';
   specificInputSchema = BurnNFTZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

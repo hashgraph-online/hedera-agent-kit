@@ -97,6 +97,7 @@ export class HederaUpdateTokenTool extends BaseHederaTransactionTool<
   description =
     'Updates an existing Hedera token. Requires tokenId. Other fields are optional. Null can be used to clear certain fields.';
   specificInputSchema = UpdateTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

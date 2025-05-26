@@ -81,6 +81,7 @@ export class HederaCreateContractTool extends BaseHederaTransactionTool<
   description =
     'Creates/deploys a new Hedera smart contract. Builder handles parsing, conversions, and validation of inputs (e.g., bytecode source).';
   specificInputSchema = CreateContractZodSchemaCore;
+  namespace = 'scs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

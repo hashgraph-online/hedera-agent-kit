@@ -28,6 +28,7 @@ export class HederaDeleteNftSerialAllowancesTool extends BaseHederaTransactionTo
   description =
     'Deletes all allowances for a specific NFT serial (for all spenders), granted by an owner. This action must be signed by the NFT owner.';
   specificInputSchema = DeleteNftSerialAllowancesZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

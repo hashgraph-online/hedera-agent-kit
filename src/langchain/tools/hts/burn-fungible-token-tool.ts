@@ -24,6 +24,7 @@ export class HederaBurnFungibleTokenTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-burn-fungible-token';
   description = 'Burns fungible tokens. Requires tokenId and amount.';
   specificInputSchema = BurnFTZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

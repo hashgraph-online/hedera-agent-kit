@@ -22,6 +22,7 @@ export class HederaRevokeKycTokenTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-revoke-kyc-token';
   description = 'Revokes KYC from an account for a specific token.';
   specificInputSchema = RevokeKycTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

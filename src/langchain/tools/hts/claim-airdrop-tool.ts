@@ -37,6 +37,7 @@ export class HederaClaimAirdropTool extends BaseHederaTransactionTool<
   description =
     'Claims pending airdropped tokens (fungible or NFT serials). Requires an array of airdrop objects, each specifying senderAccountId, tokenId, and serialNumber. Use metaOptions for execution control.';
   specificInputSchema = ClaimAirdropZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

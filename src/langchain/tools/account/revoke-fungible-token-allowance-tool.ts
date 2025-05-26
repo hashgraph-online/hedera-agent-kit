@@ -32,6 +32,7 @@ export class HederaRevokeFungibleTokenAllowanceTool extends BaseHederaTransactio
   description =
     'Revokes/clears a fungible token allowance for a specific spender by approving zero amount.';
   specificInputSchema = RevokeFungibleTokenAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -1,62 +1,91 @@
-import { Tool } from '@langchain/core/tools';
-import HederaAgentKit from '../../../agent/agent';
-import { TopicId } from '@hashgraph/sdk';
+import { z } from 'zod';
+import {
+  BaseHederaQueryTool,
+  BaseHederaQueryToolParams,
+} from '../common/base-hedera-query-tool';
 
-export class HederaGetTopicMessagesTool extends Tool {
-  name = 'hedera_get_topic_messages';
+const GetTopicMessagesByFilterZodSchema = z.object({
+  topicId: z
+    .string()
+    .describe('The topic ID to get messages for (e.g., "0.0.12345")'),
+  sequenceNumber: z
+    .string()
+    .optional()
+    .describe('Filter by sequence number (e.g., "gt:10", "lte:20")'),
+  startTime: z
+    .string()
+    .optional()
+    .describe('Filter by start consensus timestamp (e.g., "1629400000.000000000")'),
+  endTime: z
+    .string()
+    .optional()
+    .describe('Filter by end consensus timestamp (e.g., "1629500000.000000000")'),
+  limit: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum number of messages to return'),
+  order: z
+    .enum(['asc', 'desc'])
+    .optional()
+    .describe('Order of messages (ascending or descending)'),
+});
 
-  description = `Get messages from a topic on Hedera within an optional time range.
+/**
+ * Tool for retrieving filtered messages from a Hedera Consensus Service topic.
+ * This is a read-only operation that queries the mirror node.
+ */
+export class HederaGetTopicMessages extends BaseHederaQueryTool<
+  typeof GetTopicMessagesByFilterZodSchema
+> {
+  name = 'hedera-get-topic-messages-by-filter';
+  description =
+    'Retrieves filtered messages from a Hedera Consensus Service topic with optional filters for sequence number, time range, limit, and order.';
+  specificInputSchema = GetTopicMessagesByFilterZodSchema;
+  namespace = 'hcs';
 
-Inputs (input is a JSON string):
-- topicId: string, the ID of the topic to get the messages from e.g. "0.0.123456"
-- lowerThreshold: string (optional), ISO date string for the start of the time range e.g. "2025-01-02T00:00:00.000Z"
-- upperThreshold: string (optional), ISO date string for the end of the time range e.g. "2025-01-20T12:50:30.123Z"
-
-Example usage:
-1. Get all messages from topic 0.0.123456:
-  '{
-    "topicId": "0.0.123456"
-  }'
-
-2. Get messages from topic after January 2, 2025:
-  '{
-    "topicId": "0.0.123456",
-    "lowerThreshold": "2025-01-02T00:00:00.000Z"
-  }'
-
-3. Get messages between two dates: 2024-03-05T13:40:00.000Z and 2025-01-20T12:50:30.123Z
-  '{
-    "topicId": "0.0.123456", 
-    "lowerThreshold": "2024-03-05T13:40:00.000Z",
-    "upperThreshold": "2025-01-20T12:50:30.123Z"
-  }'
-`;
-
-  constructor(private hederaKit: HederaAgentKit) {
-    super();
+  constructor(params: BaseHederaQueryToolParams) {
+    super(params);
   }
 
-  protected async _call(input: string): Promise<string> {
-    try {
-      console.log('hedera_get_topic_messages tool has been called');
+  protected async executeQuery(
+    args: z.infer<typeof GetTopicMessagesByFilterZodSchema>
+  ): Promise<unknown> {
+    this.logger.info(`Getting filtered messages for topic ID: ${args.topicId}`);
+    
+    const options: {
+      sequenceNumber?: string;
+      startTime?: string;
+      endTime?: string;
+      limit?: number;
+      order?: 'asc' | 'desc';
+    } = {};
 
-      const parsedInput = JSON.parse(input);
-      const messages = await this.hederaKit.getTopicMessages(
-        TopicId.fromString(parsedInput.topicId),
-        parsedInput.lowerThreshold,
-        parsedInput.upperThreshold
-      );
-      return JSON.stringify({
-        status: 'success',
-        message: 'Topic messages retrieved',
-        messages: messages,
-      });
-    } catch (error: any) {
-      return JSON.stringify({
-        status: 'error',
-        message: error.message,
-        code: error.code || 'UNKNOWN_ERROR',
-      });
+    if (args.sequenceNumber) options.sequenceNumber = args.sequenceNumber;
+    if (args.startTime) options.startTime = args.startTime;
+    if (args.endTime) options.endTime = args.endTime;
+    if (args.limit) options.limit = args.limit;
+    if (args.order) options.order = args.order;
+
+    const messages = await this.hederaKit.query().getTopicMessagesByFilter(
+      args.topicId,
+      options
+    );
+    
+    if (!messages) {
+      return {
+        success: false,
+        error: `Could not retrieve messages for topic ${args.topicId}`,
+      };
     }
+
+    return {
+      success: true,
+      topicId: args.topicId,
+      messageCount: messages.length,
+      filters: options,
+      messages,
+    };
   }
-}
+} 

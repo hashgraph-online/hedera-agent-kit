@@ -22,6 +22,7 @@ export class HederaGrantKycTokenTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-grant-kyc-token';
   description = 'Grants KYC to an account for a specific token.';
   specificInputSchema = GrantKycTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

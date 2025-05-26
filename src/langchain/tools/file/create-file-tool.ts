@@ -29,6 +29,7 @@ export class HederaCreateFileTool extends BaseHederaTransactionTool<
   description =
     'Creates a new file. Builder handles content decoding and key parsing.';
   specificInputSchema = CreateFileZodSchemaCore;
+  namespace = 'file';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

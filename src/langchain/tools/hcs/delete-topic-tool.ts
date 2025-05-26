@@ -19,6 +19,7 @@ export class HederaDeleteTopicTool extends BaseHederaTransactionTool<
   name = 'hedera-hcs-delete-topic';
   description = 'Deletes an HCS topic. Requires topicId.';
   specificInputSchema = DeleteTopicZodSchemaCore;
+  namespace = 'hcs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

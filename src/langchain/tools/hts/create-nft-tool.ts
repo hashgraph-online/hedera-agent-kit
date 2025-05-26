@@ -176,6 +176,7 @@ export class HederaCreateNftTool extends BaseHederaTransactionTool<
   description =
     'Creates a new Hedera Non-Fungible Token (NFT) collection. Builder handles key parsing, fee construction, and supply validation.';
   specificInputSchema = NFTCreateZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

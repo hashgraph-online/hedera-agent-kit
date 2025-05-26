@@ -27,6 +27,7 @@ export class HederaDeleteAccountTool extends BaseHederaTransactionTool<
   description =
     'Deletes an account, transferring its HBAR balance to another account.';
   specificInputSchema = DeleteAccountZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -23,6 +23,7 @@ export class HederaDissociateTokensTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-dissociate-tokens';
   description = 'Dissociates one or more Hedera tokens from an account.';
   specificInputSchema = DissociateTokensZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -74,6 +74,7 @@ export class HederaCreateAccountTool extends BaseHederaTransactionTool<
   description =
     'Creates a new Hedera account. Requires key or alias (builder validates). Builder handles parsing and defaults.';
   specificInputSchema = CreateAccountZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

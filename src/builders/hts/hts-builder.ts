@@ -110,9 +110,15 @@ function mapToSdkCustomFees(
         let feeTypeForNote = 'custom';
         if (feeData.type === 'FIXED' || feeData.type === 'FIXED_FEE') {
           feeTypeForNote = 'fixed';
-        } else if (feeData.type === 'FRACTIONAL' || feeData.type === 'FRACTIONAL_FEE') {
+        } else if (
+          feeData.type === 'FRACTIONAL' ||
+          feeData.type === 'FRACTIONAL_FEE'
+        ) {
           feeTypeForNote = 'fractional';
-        } else if (feeData.type === 'ROYALTY' || feeData.type === 'ROYALTY_FEE') {
+        } else if (
+          feeData.type === 'ROYALTY' ||
+          feeData.type === 'ROYALTY_FEE'
+        ) {
           feeTypeForNote = 'royalty';
         }
         addNoteFn(
@@ -509,14 +515,18 @@ export class HtsBuilder extends BaseServiceBuilder {
     }
     if (params.wipeKey) {
       const parsedKey = await this.parseKey(params.wipeKey);
-      if (parsedKey) transaction.setWipeKey(parsedKey);
+      if (parsedKey) {
+        transaction.setWipeKey(parsedKey);
+      }
     }
 
     if (params.supplyKey) {
       const parsedKey = await this.parseKey(params.supplyKey);
-      if (parsedKey) transaction.setSupplyKey(parsedKey);
+      if (parsedKey) {
+        transaction.setSupplyKey(parsedKey);
+      }
     } else {
-      const operator = await this.kit.getAccountInfo(treasuryAccId);
+      const operator = await this.kit.query().getAccountInfo(treasuryAccId);
       const key = operator?.key?.key;
       if (key) {
         transaction.setSupplyKey(PublicKey.fromString(key));
@@ -525,11 +535,15 @@ export class HtsBuilder extends BaseServiceBuilder {
 
     if (params.feeScheduleKey) {
       const parsedKey = await this.parseKey(params.feeScheduleKey);
-      if (parsedKey) transaction.setFeeScheduleKey(parsedKey);
+      if (parsedKey) {
+        transaction.setFeeScheduleKey(parsedKey);
+      }
     }
     if (params.pauseKey) {
       const parsedKey = await this.parseKey(params.pauseKey);
-      if (parsedKey) transaction.setPauseKey(parsedKey);
+      if (parsedKey) {
+        transaction.setPauseKey(parsedKey);
+      }
     }
     if (params.memo) {
       transaction.setTokenMemo(params.memo);

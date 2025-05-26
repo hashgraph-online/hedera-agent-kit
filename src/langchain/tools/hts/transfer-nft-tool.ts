@@ -31,6 +31,7 @@ export class HederaTransferNftTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-transfer-nft';
   description = 'Transfers a single Non-Fungible Token (NFT).';
   specificInputSchema = TransferNftZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

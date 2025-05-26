@@ -20,6 +20,7 @@ export class HederaPauseTokenTool extends BaseHederaTransactionTool<
   description =
     'Pauses a token. Requires the tokenId. Use metaOptions for execution control.';
   specificInputSchema = PauseTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

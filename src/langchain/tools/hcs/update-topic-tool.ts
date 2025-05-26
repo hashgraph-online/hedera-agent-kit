@@ -63,6 +63,7 @@ export class HederaUpdateTopicTool extends BaseHederaTransactionTool<
   description =
     'Updates an HCS topic. Requires topicId. Other fields are optional. Null can be used to clear certain fields.';
   specificInputSchema = UpdateTopicZodSchemaCore;
+  namespace = 'hcs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

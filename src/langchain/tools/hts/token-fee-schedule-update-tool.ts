@@ -87,6 +87,7 @@ export class HederaTokenFeeScheduleUpdateTool extends BaseHederaTransactionTool<
   description =
     'Updates the fee schedule of a token. Requires tokenId and an array of custom fee objects.';
   specificInputSchema = TokenFeeScheduleUpdateZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

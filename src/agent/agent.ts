@@ -1,40 +1,19 @@
 import {
   AccountId,
   Client,
-  TokenId,
-  TopicId,
   PublicKey,
   TransactionId,
   TransactionReceipt,
-  AccountBalanceQuery,
   ScheduleSignTransaction,
   ScheduleId,
 } from '@hashgraph/sdk';
 import { AbstractSigner } from '../signer/abstract-signer';
 import {
-  Airdrop,
-  HCSMessage,
-  HederaNetworkType as KitHederaNetworkType,
-  HtsTokenDetails,
-  TokenBalance,
-  DetailedTokenBalance,
   SignScheduledTransactionParams,
   AgentOperationalMode,
   HederaNetworkType,
 } from '../types';
-import {
-  get_hts_balance,
-  get_hts_token_details,
-  get_pending_airdrops,
-  get_token_holders,
-  get_topic_messages,
-} from '../tools';
-import {
-  HederaMirrorNode,
-  AccountResponse,
-  TopicResponse,
-  Logger,
-} from '@hashgraphonline/standards-sdk';
+import { HederaMirrorNode, Logger } from '@hashgraphonline/standards-sdk';
 import {
   IPlugin,
   GenericPluginContext,
@@ -45,9 +24,10 @@ import { HtsBuilder } from '../builders/hts/hts-builder';
 import { AccountBuilder } from '../builders/account/account-builder';
 import { ScsBuilder } from '../builders/scs/scs-builder';
 import { FileBuilder } from '../builders/file/file-builder';
+import { QueryBuilder } from '../builders/query/query-builder';
 import { ExecuteResult } from '../builders/base-service-builder';
-import { BigNumber } from 'bignumber.js';
 import { createHederaTools } from '../langchain';
+import { ModelCapability } from '../types/model-capability';
 
 export interface PluginConfig {
   plugins?: IPlugin[];
@@ -75,13 +55,17 @@ export class HederaAgentKit {
   public operationalMode: AgentOperationalMode;
   public userAccountId?: string | undefined;
   public scheduleUserTransactionsInBytesMode: boolean;
+  public modelCapability: ModelCapability;
+  public modelName?: string | undefined;
 
   constructor(
     signer: AbstractSigner,
     pluginConfigInput?: PluginConfig | undefined,
     initialOperationalMode: AgentOperationalMode = 'provideBytes',
     userAccountId?: string,
-    scheduleUserTransactionsInBytesMode: boolean = true
+    scheduleUserTransactionsInBytesMode: boolean = true,
+    modelCapability: ModelCapability = ModelCapability.MEDIUM,
+    modelName?: string
   ) {
     this.signer = signer;
     this.network = this.signer.getNetwork();
@@ -117,6 +101,8 @@ export class HederaAgentKit {
     this.userAccountId = userAccountId;
     this.scheduleUserTransactionsInBytesMode =
       scheduleUserTransactionsInBytesMode;
+    this.modelCapability = modelCapability;
+    this.modelName = modelName;
   }
 
   /**
@@ -165,7 +151,8 @@ export class HederaAgentKit {
     const coreKitTools = await createHederaTools(
       this,
       signerAccountId,
-      signerPrivateKey
+      signerPrivateKey,
+      this.modelCapability
     );
     const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
       return plugin.getTools();
@@ -175,225 +162,10 @@ export class HederaAgentKit {
       ...coreKitTools,
       ...pluginTools,
     ] as unknown as Tool[];
-    console.log(
-      'langchain tools are',
-      this.aggregatedTools.map((a) => a.name)
-    );
+
     this.isInitialized = true;
     this.logger.info(
       'HederaAgentKit initialized successfully with all tools aggregated.'
-    );
-  }
-
-  public async getHbarBalance(
-    accountIdInput: AccountId | string
-  ): Promise<number> {
-    const accountId =
-      typeof accountIdInput === 'string'
-        ? AccountId.fromString(accountIdInput)
-        : accountIdInput;
-    const balanceQuery = await new AccountBalanceQuery()
-      .setAccountId(accountId)
-      .execute(this.client);
-    return balanceQuery.hbars.toBigNumber().toNumber();
-  }
-
-  public async getHtsTokenBalance(
-    tokenIdInput: TokenId | string,
-    accountIdInput: AccountId | string
-  ): Promise<number> {
-    const accountId =
-      typeof accountIdInput === 'string'
-        ? AccountId.fromString(accountIdInput)
-        : accountIdInput;
-    const tokenId =
-      typeof tokenIdInput === 'string'
-        ? TokenId.fromString(tokenIdInput)
-        : tokenIdInput;
-    return get_hts_balance(
-      tokenId.toString(),
-      this.network as KitHederaNetworkType,
-      accountId.toString()
-    );
-  }
-
-  public async getAllTokensBalances(
-    accountIdInput: AccountId | string
-  ): Promise<DetailedTokenBalance[]> {
-    const accountId =
-      typeof accountIdInput === 'string'
-        ? AccountId.fromString(accountIdInput)
-        : accountIdInput;
-    this.logger.info(
-      `Fetching all token balances for account ${accountId.toString()}`
-    );
-
-    try {
-      const accountInfo = await this.mirrorNode.requestAccount(
-        accountId.toString()
-      );
-      if (!accountInfo || !accountInfo.balance || !accountInfo.balance.tokens) {
-        this.logger.warn(
-          `No token balances found for account ${accountId.toString()} or account info is incomplete.`
-        );
-        return [];
-      }
-
-      const detailedBalances: DetailedTokenBalance[] = [];
-
-      for (const tokenEntry of accountInfo.balance.tokens) {
-        const tokenIdString = tokenEntry.token_id;
-        const balanceInSmallestUnit = tokenEntry.balance;
-
-        const tokenDetails = await this.getHtsTokenDetails(tokenIdString);
-
-        if (tokenDetails) {
-          const decimals = parseInt(tokenDetails.decimals || '0');
-          const balanceBigNumber = new BigNumber(balanceInSmallestUnit);
-          const displayBalance = balanceBigNumber.shiftedBy(-decimals);
-
-          detailedBalances.push({
-            tokenId: tokenIdString,
-            tokenSymbol: tokenDetails.symbol || '',
-            tokenName: tokenDetails.name || '',
-            tokenDecimals: tokenDetails.decimals || '0',
-            balance: balanceInSmallestUnit,
-            balanceInDisplayUnit: displayBalance,
-            timestamp: Date.now().toString(),
-            balances: [],
-            links: { next: null },
-          });
-        } else {
-          this.logger.warn(
-            `Could not fetch details for token ${tokenIdString} while getting all balances for ${accountId.toString()}. Skipping this token.`
-          );
-          detailedBalances.push({
-            tokenId: tokenIdString,
-            tokenSymbol: 'UNKNOWN',
-            tokenName: 'Unknown Token',
-            tokenDecimals: '0',
-            balance: balanceInSmallestUnit,
-            balanceInDisplayUnit: new BigNumber(balanceInSmallestUnit),
-            timestamp: Date.now().toString(),
-            balances: [],
-            links: { next: null },
-          });
-        }
-      }
-      return detailedBalances;
-    } catch (error: unknown) {
-      this.logger.error(
-        `Failed to get all token balances for ${accountId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves detailed information about a specific HTS token.
-   * @param {TokenId | string} tokenIdInput - The token ID or its string representation.
-   * @returns {Promise<HtsTokenDetails>} A promise that resolves to the token details.
-   */
-  public async getHtsTokenDetails(
-    tokenIdInput: TokenId | string
-  ): Promise<HtsTokenDetails> {
-    const tokenId =
-      typeof tokenIdInput === 'string'
-        ? TokenId.fromString(tokenIdInput)
-        : tokenIdInput;
-    this.logger.info(
-      `Fetching token info for ${tokenId.toString()} using imported get_hts_token_details`
-    );
-    return get_hts_token_details(
-      tokenId.toString(),
-      this.network as KitHederaNetworkType
-    );
-  }
-
-  public async getTokenHolders(
-    tokenIdInput: TokenId | string,
-    threshold?: number
-  ): Promise<Array<TokenBalance>> {
-    const tokenId =
-      typeof tokenIdInput === 'string'
-        ? TokenId.fromString(tokenIdInput)
-        : tokenIdInput;
-    return get_token_holders(
-      tokenId.toString(),
-      this.network as KitHederaNetworkType,
-      threshold
-    );
-  }
-
-  public async getPendingAirdrops(
-    accountIdInput: AccountId | string
-  ): Promise<Airdrop[]> {
-    const accountId =
-      typeof accountIdInput === 'string'
-        ? AccountId.fromString(accountIdInput)
-        : accountIdInput;
-    return get_pending_airdrops(
-      this.network as KitHederaNetworkType,
-      accountId.toString()
-    );
-  }
-
-  /**
-   * Retrieves information about a specific HCS topic from the mirror node.
-   * @param {string} topicIdString - The topic ID string (e.g., "0.0.xxxx").
-   * @returns {Promise<TopicResponse | null>} A promise that resolves to the topic information from the standards-sdk.
-   */
-  public async getTopicInfo(
-    topicIdInput: TopicId | string
-  ): Promise<TopicResponse | null> {
-    const topicId =
-      typeof topicIdInput === 'string'
-        ? TopicId.fromString(topicIdInput)
-        : topicIdInput;
-    this.logger.info(
-      `Fetching topic info for ${topicId.toString()} using HederaAgentKit.mirrorNode`
-    );
-    try {
-      const topicInfo = await this.mirrorNode.getTopicInfo(topicId.toString());
-      return topicInfo;
-    } catch (e: unknown) {
-      const error = e as Error;
-      this.logger.error(
-        `Failed to get topic info for ${topicId.toString()}: ${error.message}`
-      );
-      if (error.message && error.message.toLowerCase().includes('not found')) {
-        return null;
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves parsed HCS-10 style messages for a specific HCS topic from the mirror node.
-   * Note: This returns messages parsed according to HCS-10 conventions (e.g., JSON payloads),
-   * not the raw mirror node message format.
-   * @param {string} topicIdString - The topic ID string (e.g., "0.0.xxxx").
-   * @param {number} [lowerTimestamp] - Optional: This implementation currently does not filter by timestamp if using standards-sdk's getTopicMessages, which fetches all and parses.
-   * @param {number} [upperTimestamp] - Optional: Timestamp filtering would need to be post-fetch if not supported by the underlying method.
-   * @returns {Promise<StandardsSdkHCSMessage[]>} A promise that resolves to an array of HCS-10 style messages.
-   * @throws {Error} If the mirror node request fails.
-   */
-  public async getTopicMessages(
-    topicIdInput: TopicId | string,
-    lowerTimestamp?: number,
-    upperTimestamp?: number
-  ): Promise<Array<HCSMessage>> {
-    const topicId =
-      typeof topicIdInput === 'string'
-        ? TopicId.fromString(topicIdInput)
-        : topicIdInput;
-    return get_topic_messages(
-      topicId,
-      this.network as KitHederaNetworkType,
-      lowerTimestamp,
-      upperTimestamp
     );
   }
 
@@ -480,6 +252,18 @@ export class HederaAgentKit {
   }
 
   /**
+   * Provides access to the Hedera Query builder for read-only operations.
+   * @returns {QueryBuilder} An instance of QueryBuilder.
+   * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
+   */
+  public query(): QueryBuilder {
+    if (!this.isInitialized) {
+      throw new Error(NOT_INITIALIZED_ERROR);
+    }
+    return new QueryBuilder(this);
+  }
+
+  /**
    * Retrieves the transaction receipt for a given transaction ID string.
    * @param {string} transactionIdString - The transaction ID (e.g., "0.0.xxxx@16666666.77777777").
    * @returns {Promise<TransactionReceipt>} A promise that resolves to the TransactionReceipt.
@@ -497,37 +281,6 @@ export class HederaAgentKit {
     } catch (error: unknown) {
       this.logger.error(
         `Failed to get transaction receipt for ${transactionId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Retrieves information about a specific Hedera account from the mirror node.
-   * @param {AccountId | string} accountIdInput - The account ID or its string representation.
-   * @returns {Promise<AccountResponse>} A promise that resolves to the account information from the standards-sdk.
-   * @throws {Error} If the mirror node request fails.
-   */
-  public async getAccountInfo(
-    accountIdInput: AccountId | string
-  ): Promise<AccountResponse> {
-    const accountId =
-      typeof accountIdInput === 'string'
-        ? AccountId.fromString(accountIdInput)
-        : accountIdInput;
-    this.logger.info(
-      `Fetching account info for ${accountId.toString()} using HederaAgentKit.mirrorNode`
-    );
-    try {
-      const accountInfo = await this.mirrorNode.requestAccount(
-        accountId.toString()
-      );
-      return accountInfo;
-    } catch (error: unknown) {
-      this.logger.error(
-        `Failed to get account info for ${accountId.toString()}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

@@ -24,6 +24,7 @@ export class SignAndExecuteScheduledTransactionTool extends BaseHederaTransactio
   description =
     'Prepares a ScheduleSignTransaction to add a signature to an existing scheduled transaction. Depending on agent configuration, this will either return transaction bytes (for the user to sign and pay) or be executed directly by the agent (agent signs and pays).';
   specificInputSchema = signAndExecuteScheduledTransactionSchema;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

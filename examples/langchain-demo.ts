@@ -11,8 +11,6 @@ dotenv.config();
 import { ServerSigner } from '../src/signer/server-signer';
 import {
   Transaction,
-  ScheduleInfoQuery,
-  ScheduleId as SDKScheduleId,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import * as readline from 'readline';
@@ -74,6 +72,7 @@ async function main() {
     verbose: false,
     openAIApiKey: openaiApiKey,
     scheduleUserTransactionsInBytesMode: true,
+    openAIModelName: 'gpt-4o-mini',
     pluginConfig: {
       plugins: [new HelloWorldPlugin() as IPlugin],
     },

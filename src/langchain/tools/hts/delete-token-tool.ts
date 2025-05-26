@@ -20,6 +20,7 @@ export class HederaDeleteTokenTool extends BaseHederaTransactionTool<
   description =
     'Deletes a token. Requires the tokenId. Use metaOptions for execution control.';
   specificInputSchema = DeleteTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -1,4 +1,4 @@
-import { StructuredTool, Tool } from '@langchain/core/tools';
+import { StructuredTool } from '@langchain/core/tools';
 import HederaAgentKit from '../agent/agent';
 import * as dotenv from 'dotenv';
 import { PrivateKey } from '@hashgraph/sdk';
@@ -46,6 +46,33 @@ import { HederaUpdateContractTool } from './tools/scs/update-contract-tool';
 import { HederaDeleteContractTool } from './tools/scs/delete-contract-tool';
 import { HederaExecuteContractTool } from './tools/scs/execute-contract-tool';
 import { BaseHederaTransactionToolParams } from './tools/common/base-hedera-transaction-tool';
+import { BaseHederaQueryToolParams } from './tools/common/base-hedera-query-tool';
+import { ModelCapability } from '../types/model-capability';
+import { HederaGetTopicInfoTool } from './tools/hcs/get-topic-info-tool';
+import { HederaGetTopicFeesTool } from './tools/hcs/get-topic-fees-tool';
+import { HederaGetAccountBalanceTool } from './tools/account/get-account-balance-tool';
+import { HederaGetAccountPublicKeyTool } from './tools/account/get-account-public-key-tool';
+import { HederaGetAccountInfoTool } from './tools/account/get-account-info-tool';
+import { HederaGetAccountTokensTool } from './tools/account/get-account-tokens-tool';
+import { HederaGetAccountNftsTool } from './tools/account/get-account-nfts-tool';
+import { HederaGetTokenInfoTool } from './tools/hts/get-token-info-tool';
+import { HederaValidateNftOwnershipTool } from './tools/hts/validate-nft-ownership-tool';
+import { HederaGetHbarPriceTool } from './tools/network/get-hbar-price-tool';
+import { HederaGetTransactionTool } from './tools/transaction/get-transaction-tool';
+import { HederaGetOutstandingAirdropsTool } from './tools/account/get-outstanding-airdrops-tool';
+import { HederaGetPendingAirdropsTool } from './tools/account/get-pending-airdrops-tool';
+import { HederaGetBlocksTool } from './tools/network/get-blocks-tool';
+import { HederaGetContractsTool } from './tools/scs/get-contracts-tool';
+import { HederaGetContractTool } from './tools/scs/get-contract-tool';
+import { HederaGetNetworkInfoTool } from './tools/network/get-network-info-tool';
+import { HederaGetNetworkFeesTool } from './tools/network/get-network-fees-tool';
+import { HederaAirdropTokenTool } from './tools/hts/airdrop-token-tool';
+import { HederaAssociateTokensTool } from './tools/hts/associate-tokens-tool';
+import { HederaUpdateTopicTool } from './tools/hcs/update-topic-tool';
+import { HederaGetTopicMessages } from './tools/hcs/get-topic-messages-tool';
+import { HederaGetFileContentsTool } from './tools/file/get-file-contents-tool';
+import { HederaDeleteNftSpenderAllowanceTool } from './tools/account/delete-nft-spender-allowance-tool';
+import { HederaDeleteNftSerialAllowancesTool } from './tools/account/delete-nft-allowance-all-serials-tool';
 
 dotenv.config();
 
@@ -53,16 +80,26 @@ dotenv.config();
  * @description Creates and aggregates all available Hedera LangChain tools.
  * This function is intended to be called by HederaAgentKit during its initialization.
  * @param {HederaAgentKit} hederaKit - The initialized HederaAgentKit instance.
+ * @param {string} operatorId - The operator account ID.
+ * @param {PrivateKey} operatorKey - The operator private key.
+ * @param {ModelCapability} modelCapability - The model capability for response processing.
  * @returns {Tool[]} An array of LangChain Tool instances.
  */
 export async function createHederaTools(
   hederaKit: HederaAgentKit,
   operatorId?: string,
-  operatorKey?: PrivateKey
+  operatorKey?: PrivateKey,
+  modelCapability: ModelCapability = ModelCapability.MEDIUM
 ): Promise<StructuredTool[]> {
   const toolParams: BaseHederaTransactionToolParams = {
     hederaKit,
     logger: hederaKit.logger,
+  };
+
+  const queryToolParams: BaseHederaQueryToolParams = {
+    hederaKit,
+    logger: hederaKit.logger,
+    modelCapability,
   };
 
   const hederaTools: StructuredTool[] = [
@@ -75,12 +112,17 @@ export async function createHederaTools(
     new HederaUpdateAccountTool(toolParams),
     new HederaRevokeHbarAllowanceTool(toolParams),
     new HederaRevokeFungibleTokenAllowanceTool(toolParams),
+    new HederaDeleteNftSpenderAllowanceTool(toolParams),
+    new HederaDeleteNftSerialAllowancesTool(toolParams),
     new SignAndExecuteScheduledTransactionTool(toolParams),
     new HederaCreateTopicTool(toolParams),
     new HederaDeleteTopicTool(toolParams),
+    new HederaUpdateTopicTool(toolParams),
     new HederaSubmitMessageTool(toolParams),
     new HederaBurnFungibleTokenTool(toolParams),
     new HederaBurnNftTool(toolParams),
+    new HederaAirdropTokenTool(toolParams),
+    new HederaAssociateTokensTool(toolParams),
     new HederaClaimAirdropTool(toolParams),
     new HederaCreateFungibleTokenTool(toolParams),
     new HederaCreateNftTool(toolParams),
@@ -108,10 +150,33 @@ export async function createHederaTools(
     new HederaUpdateContractTool(toolParams),
     new HederaDeleteContractTool(toolParams),
     new HederaExecuteContractTool(toolParams),
+    new HederaGetTopicInfoTool(queryToolParams) as StructuredTool,
+    new HederaGetTopicFeesTool(queryToolParams) as StructuredTool,
+    new HederaGetTopicMessages(queryToolParams) as StructuredTool,
+    new HederaGetAccountBalanceTool(queryToolParams) as StructuredTool,
+    new HederaGetAccountPublicKeyTool(queryToolParams) as StructuredTool,
+    new HederaGetAccountInfoTool(queryToolParams) as StructuredTool,
+    new HederaGetAccountTokensTool(queryToolParams) as StructuredTool,
+    new HederaGetAccountNftsTool(queryToolParams) as StructuredTool,
+    new HederaGetOutstandingAirdropsTool(queryToolParams) as StructuredTool,
+    new HederaGetPendingAirdropsTool(queryToolParams) as StructuredTool,
+    new HederaGetTokenInfoTool(queryToolParams) as StructuredTool,
+    new HederaValidateNftOwnershipTool(queryToolParams) as StructuredTool,
+    new HederaGetHbarPriceTool(queryToolParams) as StructuredTool,
+    new HederaGetTransactionTool(queryToolParams) as StructuredTool,
+    new HederaGetBlocksTool(queryToolParams) as StructuredTool,
+    new HederaGetContractsTool(queryToolParams) as StructuredTool,
+    new HederaGetContractTool(queryToolParams) as StructuredTool,
+    new HederaGetNetworkInfoTool(queryToolParams) as StructuredTool,
+    new HederaGetNetworkFeesTool(queryToolParams) as StructuredTool,
+    new HederaGetFileContentsTool(queryToolParams) as StructuredTool,
   ];
 
-  try {
+  hederaKit.logger.info(
+    `Created ${hederaTools.length} tools with model capability: ${modelCapability}`
+  );
 
+  try {
     let operatorKeyForStandards: PrivateKey | undefined;
     if (operatorKey) {
       operatorKeyForStandards = operatorKey;
@@ -164,15 +229,16 @@ export { HederaCreateTopicTool } from './tools/hcs/create-topic-tool';
 export { HederaDeleteTopicTool } from './tools/hcs/delete-topic-tool';
 export { HederaSubmitMessageTool } from './tools/hcs/submit-message-tool';
 export { HederaUpdateTopicTool } from './tools/hcs/update-topic-tool';
+export { HederaGetTopicInfoTool } from './tools/hcs/get-topic-info-tool';
+export { HederaGetTopicFeesTool } from './tools/hcs/get-topic-fees-tool';
+export { HederaGetTopicMessages } from './tools/hcs/get-topic-messages-tool';
 
 export { HederaAirdropTokenTool } from './tools/hts/airdrop-token-tool';
 export { HederaAssociateTokensTool } from './tools/hts/associate-tokens-tool';
 export { HederaClaimAirdropTool } from './tools/hts/claim-airdrop-tool';
 export { HederaCreateFungibleTokenTool } from './tools/hts/create-fungible-token-tool';
 export { HederaCreateNftTool } from './tools/hts/create-nft-tool';
-export { HederaGetAllTokenBalancesTool } from './tools/hts/get-token-balances-tool';
-export { HederaGetPendingAirdropTool } from './tools/hts/get-pending-airdrops';
-export { HederaGetTokenHoldersTool } from './tools/hts/get-token-holders';
+
 export { HederaMintFungibleTokenTool } from './tools/hts/mint-fungible-token-tool';
 export { HederaMintNftTool } from './tools/hts/mint-nft-tool';
 export { HederaRejectTokensTool } from './tools/hts/reject-tokens-tool';
@@ -191,6 +257,8 @@ export { HederaTokenFeeScheduleUpdateTool } from './tools/hts/token-fee-schedule
 export { HederaTransferNftTool } from './tools/hts/transfer-nft-tool';
 export { HederaBurnFungibleTokenTool } from './tools/hts/burn-fungible-token-tool';
 export { HederaBurnNftTool } from './tools/hts/burn-nft-tool';
+export { HederaGetTokenInfoTool } from './tools/hts/get-token-info-tool';
+export { HederaValidateNftOwnershipTool } from './tools/hts/validate-nft-ownership-tool';
 
 export { HederaApproveFungibleTokenAllowanceTool } from './tools/account/approve-fungible-token-allowance-tool';
 export { HederaApproveHbarAllowanceTool } from './tools/account/approve-hbar-allowance-tool';
@@ -201,6 +269,11 @@ export { HederaUpdateAccountTool } from './tools/account/update-account-tool';
 export { HederaTransferHbarTool } from './tools/account/transfer-hbar-tool';
 export { HederaRevokeHbarAllowanceTool } from './tools/account/revoke-hbar-allowance-tool';
 export { HederaRevokeFungibleTokenAllowanceTool } from './tools/account/revoke-fungible-token-allowance-tool';
+export { HederaGetAccountBalanceTool } from './tools/account/get-account-balance-tool';
+export { HederaGetAccountPublicKeyTool } from './tools/account/get-account-public-key-tool';
+export { HederaGetAccountInfoTool } from './tools/account/get-account-info-tool';
+export { HederaGetAccountTokensTool } from './tools/account/get-account-tokens-tool';
+export { HederaGetAccountNftsTool } from './tools/account/get-account-nfts-tool';
 
 export { HederaCreateFileTool } from './tools/file/create-file-tool';
 export { HederaAppendFileTool } from './tools/file/append-file-tool';
@@ -212,3 +285,6 @@ export { HederaCreateContractTool } from './tools/scs/create-contract-tool';
 export { HederaUpdateContractTool } from './tools/scs/update-contract-tool';
 export { HederaDeleteContractTool } from './tools/scs/delete-contract-tool';
 export { HederaExecuteContractTool } from './tools/scs/execute-contract-tool';
+
+export { HederaGetHbarPriceTool } from './tools/network/get-hbar-price-tool';
+export { HederaGetTransactionTool } from './tools/transaction/get-transaction-tool';

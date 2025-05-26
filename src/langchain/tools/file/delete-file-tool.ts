@@ -19,6 +19,7 @@ export class HederaDeleteFileTool extends BaseHederaTransactionTool<
   name = 'hedera-file-delete';
   description = 'Deletes a file from the Hedera File Service.';
   specificInputSchema = DeleteFileZodSchemaCore;
+  namespace = 'file';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -34,6 +34,7 @@ export class HederaApproveHbarAllowanceTool extends BaseHederaTransactionTool<
   description =
     'Approves an HBAR allowance for a spender. Builder handles Hbar unit conversion.';
   specificInputSchema = ApproveHbarAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

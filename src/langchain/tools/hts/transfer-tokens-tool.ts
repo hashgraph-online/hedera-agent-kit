@@ -77,6 +77,7 @@ export class HederaTransferTokensTool extends BaseHederaTransactionTool<
   description =
     'Transfers multiple fungible tokens, NFTs, and/or HBAR in a single transaction. Builder handles parsing and validation.';
   specificInputSchema = TransferTokensZodObjectSchema;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

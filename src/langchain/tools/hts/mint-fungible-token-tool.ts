@@ -24,6 +24,7 @@ export class HederaMintFungibleTokenTool extends BaseHederaTransactionTool<
   name = 'hedera-hts-mint-fungible-token';
   description = 'Mints more fungible tokens. Requires tokenId and amount.';
   specificInputSchema = MintFTZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

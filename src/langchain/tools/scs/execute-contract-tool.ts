@@ -54,6 +54,7 @@ export class HederaExecuteContractTool extends BaseHederaTransactionTool<
   description =
     'Executes a smart contract function. Builder handles parameter parsing, type conversions, and Hbar unit logic.';
   specificInputSchema = ExecuteContractZodSchemaCore;
+  namespace = 'scs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

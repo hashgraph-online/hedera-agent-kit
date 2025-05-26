@@ -96,7 +96,7 @@ async function createTestAgentExecutor(
   const tools = [tool]; // This is the array of actual tool instances
   const llm = new ChatOpenAI({
     apiKey: openAIApiKey,
-    modelName: 'gpt-3.5-turbo-1106',
+    modelName: 'gpt-4o-mini',
     temperature: 0,
   });
 

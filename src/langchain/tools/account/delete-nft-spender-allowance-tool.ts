@@ -5,10 +5,7 @@ import {
 } from '../common/base-hedera-transaction-tool';
 import { AccountBuilder } from '../../../builders/account/account-builder';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
-import {
-  DeleteNftSpenderAllowanceParams,
-  DeleteNftSpenderAllowanceToolParams,
-} from '../../../types';
+import { DeleteNftSpenderAllowanceToolParams } from '../../../types';
 
 const DeleteNftSpenderAllowanceZodSchemaCore = z.object({
   ownerAccountId: z
@@ -45,6 +42,7 @@ export class HederaDeleteNftSpenderAllowanceTool extends BaseHederaTransactionTo
   description =
     'Deletes/revokes NFT allowances for specific serial numbers of a token for a specific spender. The owner of the NFTs must sign.';
   specificInputSchema = DeleteNftSpenderAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

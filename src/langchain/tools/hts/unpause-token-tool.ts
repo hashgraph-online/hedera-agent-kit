@@ -20,6 +20,7 @@ export class HederaUnpauseTokenTool extends BaseHederaTransactionTool<
   description =
     'Unpauses a token. Requires the tokenId. Use metaOptions for execution control.';
   specificInputSchema = UnpauseTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

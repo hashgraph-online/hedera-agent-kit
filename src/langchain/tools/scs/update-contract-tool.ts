@@ -69,6 +69,7 @@ export class HederaUpdateContractTool extends BaseHederaTransactionTool<
   description =
     'Updates an existing Hedera smart contract. Builder handles parsing and clearing logic.';
   specificInputSchema = UpdateContractZodSchemaCore;
+  namespace = 'scs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

@@ -23,6 +23,7 @@ export class HederaRejectTokensTool extends BaseHederaTransactionTool<
   description =
     'Configures the operator to reject future auto-associations with a specific token type.';
   specificInputSchema = RejectTokensZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

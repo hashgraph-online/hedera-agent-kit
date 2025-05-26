@@ -1,23 +1,16 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import StringReplace from 'vite-plugin-string-replace';
 import type { LibraryFormats } from 'vite';
 
-export default defineConfig(() => {
-  const format = (process.env.BUILD_FORMAT || 'es') as LibraryFormats;
-  let outputDir: string;
+type BuildFormat = LibraryFormats;
 
-  if (format === 'umd') {
-    outputDir = 'dist/browser';
-  } else if (format === 'cjs') {
-    outputDir = 'dist/node';
-  } else {
-    outputDir = 'dist/node';
+interface GlobalMap {
+  [key: string]: string;
   }
 
-  const externalDependencies = [
+const EXTERNAL_DEPENDENCIES = [
     '@hashgraph/sdk',
     '@hashgraphonline/hashinal-wc',
     '@hashgraphonline/standards-sdk',
@@ -31,6 +24,93 @@ export default defineConfig(() => {
     'zod',
   ];
 
+const GLOBAL_MAP: GlobalMap = {
+  '@hashgraph/sdk': 'HederaSDK',
+  '@hashgraphonline/hashinal-wc': 'HashinalsWalletConnectSDK',
+  '@hashgraphonline/standards-sdk': 'StandardsSDK',
+  '@hashgraphonline/standards-agent-kit': 'StandardsAgentKit',
+  '@langchain/core': 'LangchainCore',
+  '@langchain/langgraph': 'LangchainLanggraph',
+  '@langchain/openai': 'LangchainOpenAI',
+  'bignumber.js': 'BigNumber',
+  'date-fns': 'DateFns',
+  dotenv: 'Dotenv',
+  zod: 'Zod',
+};
+
+function getOutputDirectory(format: BuildFormat): string {
+  if (format === 'umd') {
+    return 'dist/umd';
+  }
+  if (format === 'cjs') {
+    return 'dist/cjs';
+  }
+  return 'dist/esm';
+}
+
+function getTypesOutputDirectory(
+  format: BuildFormat,
+  outputDir: string
+): string {
+  if (format === 'es') {
+    return 'dist/types';
+  }
+  return outputDir;
+}
+
+function getFileName(format: BuildFormat): (fmt: string) => string {
+  return (fmt: string) => {
+    if (format === 'umd') {
+      return `hedera-agent-kit.${fmt}.js`;
+    }
+    if (format === 'cjs') {
+      return 'index.cjs';
+    }
+    return 'index.js';
+  };
+}
+
+function isExternalDependency(id: string, format: BuildFormat): boolean {
+  if (format === 'umd') {
+    return false;
+  }
+
+  const isExternalPackage = EXTERNAL_DEPENDENCIES.some(
+    (dep) => id === dep || id.startsWith(`${dep}/`)
+  );
+
+  const isRelativeImport =
+    !id.startsWith('.') && !id.startsWith('/') && !id.includes(__dirname);
+
+  return isExternalPackage || isRelativeImport;
+}
+
+function getGlobalName(id: string): string {
+  return GLOBAL_MAP[id] || id;
+}
+
+function createRollupOutput(format: BuildFormat) {
+  if (format === 'cjs') {
+    return {
+      exports: 'named' as const,
+      format: 'cjs' as const,
+    };
+  }
+
+  return {
+    globals: getGlobalName,
+    preserveModules: format === 'es',
+    preserveModulesRoot: format === 'es' ? 'src' : undefined,
+    exports: 'named' as const,
+    inlineDynamicImports: format === 'umd',
+    name: format === 'umd' ? 'HederaAgentKit' : undefined,
+  };
+}
+
+export default defineConfig(async () => {
+  const format = (process.env.BUILD_FORMAT || 'es') as BuildFormat;
+  const outputDir = getOutputDirectory(format);
+
   const plugins = [
     StringReplace([
       {
@@ -42,17 +122,31 @@ export default defineConfig(() => {
       insertTypesEntry: true,
       include: ['src/**/*.ts'],
       exclude: ['**/*.d.ts', 'examples/**/*', 'tests/**/*', 'vite.config.ts'],
-      outDir: format === 'es' ? 'dist/types' : outputDir,
-    }),
-    nodePolyfills({
-      globals: {
-        Buffer: true,
-        global: true,
-        process: true,
-      },
-      protocolImports: true,
+      outDir: getTypesOutputDirectory(format, outputDir),
     }),
   ];
+
+  if (format === 'umd') {
+    const { nodePolyfills } = await import('vite-plugin-node-polyfills');
+    plugins.push(
+      nodePolyfills({
+        globals: {
+          Buffer: true,
+          global: true,
+          process: true,
+        },
+        protocolImports: true,
+      })
+    );
+  }
+
+  const defineConfig: Record<string, string> = {
+    VITE_BUILD_FORMAT: JSON.stringify(format),
+  };
+
+  if (format === 'cjs') {
+    defineConfig.Buffer = 'globalThis.Buffer';
+  }
 
   return {
     plugins,
@@ -67,72 +161,21 @@ export default defineConfig(() => {
       lib: {
         entry: resolve(__dirname, 'src/index.ts'),
         name: format === 'umd' ? 'HederaAgentKit' : undefined,
-        fileName: (fmt) => {
-          if (format === 'umd') {
-            return `hedera-agent-kit.${fmt}.js`;
-          } else if (format === 'cjs') {
-            return 'index.cjs';
-          } else {
-            return 'index.mjs';
-          }
-        },
+        fileName: getFileName(format),
         formats: [format],
       },
       rollupOptions: {
-        external: (id: string) => {
-          if (format === 'umd') {
-            return false;
-          }
-          return (
-            externalDependencies.some(
-              (dep) => id === dep || id.startsWith(`${dep}/`)
-            ) ||
-            (!id.startsWith('.') &&
-              !id.startsWith('/') &&
-              !id.includes(__dirname))
-          );
-        },
-        output:
-          format === 'cjs'
-            ? {
-                exports: 'named',
-                format: 'cjs',
-              }
-            : {
-                globals: (id: string) => {
-                  const globalMap: Record<string, string> = {
-                    '@hashgraph/sdk': 'HederaSDK',
-                    '@hashgraphonline/hashinal-wc': 'HashinalsWalletConnectSDK',
-                    '@hashgraphonline/standards-sdk': 'StandardsSDK',
-                    '@hashgraphonline/standards-agent-kit': 'StandardsAgentKit',
-                    '@langchain/core': 'LangchainCore',
-                    '@langchain/langgraph': 'LangchainLanggraph',
-                    '@langchain/openai': 'LangchainOpenAI',
-                    'bignumber.js': 'BigNumber',
-                    'date-fns': 'DateFns',
-                    dotenv: 'Dotenv',
-                    zod: 'Zod',
-                  };
-                  return globalMap[id] || id;
-                },
-                preserveModules: format === 'es',
-                preserveModulesRoot: format === 'es' ? 'src' : undefined,
-                exports: 'named',
-                inlineDynamicImports: format === 'umd',
-                name: format === 'umd' ? 'HederaAgentKit' : undefined,
-              },
+        external: (id: string) => isExternalDependency(id, format),
+        output: createRollupOutput(format),
       },
-      minify: 'terser',
+      minify: 'terser' as const,
       sourcemap: true,
       target: 'es2020',
     },
-    define: {
-      VITE_BUILD_FORMAT: JSON.stringify(format),
-      ...(format === 'cjs' ? { Buffer: 'globalThis.Buffer' } : {}),
-    },
+    define: defineConfig,
     ssr: {
       noExternal: [],
-      external: externalDependencies,
+      external: EXTERNAL_DEPENDENCIES,
     },
   };
 });

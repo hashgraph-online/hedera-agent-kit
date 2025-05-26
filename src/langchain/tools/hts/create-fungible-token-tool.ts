@@ -173,6 +173,7 @@ export class HederaCreateFungibleTokenTool extends BaseHederaTransactionTool<
   description =
     'Creates a new Hedera Fungible Token (FT). Builder handles key parsing, fee construction, and supply validation.';
   specificInputSchema = FTCreateZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

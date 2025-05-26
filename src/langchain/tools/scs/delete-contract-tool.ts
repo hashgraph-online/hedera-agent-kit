@@ -32,6 +32,7 @@ export class HederaDeleteContractTool extends BaseHederaTransactionTool<
   description =
     'Deletes a smart contract. Optionally specify a transfer target for any remaining balance.';
   specificInputSchema = DeleteContractZodSchemaCore;
+  namespace = 'scs';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

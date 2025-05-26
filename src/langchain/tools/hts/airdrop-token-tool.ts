@@ -32,6 +32,7 @@ export class HederaAirdropTokenTool extends BaseHederaTransactionTool<
   description =
     'Airdrops fungible tokens to multiple recipients. Builder handles parsing and validation.';
   specificInputSchema = AirdropTokenZodSchemaCore;
+  namespace = 'hts';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);

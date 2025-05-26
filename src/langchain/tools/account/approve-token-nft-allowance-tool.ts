@@ -40,6 +40,7 @@ export class HederaApproveTokenNftAllowanceTool extends BaseHederaTransactionToo
   description =
     'Approves an NFT allowance. Builder validates serials/allSerials logic and handles serial conversion.';
   specificInputSchema = ApproveTokenNftAllowanceZodSchemaCore;
+  namespace = 'account';
 
   constructor(params: BaseHederaTransactionToolParams) {
     super(params);
