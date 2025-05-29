@@ -8,7 +8,7 @@ import {
   MessagesPlaceholder,
 } from '@langchain/core/prompts';
 import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
-import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
+import { Logger } from '@hashgraphonline/standards-sdk';
 import { TransactionReceipt } from '@hashgraph/sdk';
 import { StructuredTool } from '@langchain/core/tools';
 import { AgentOperationalMode, MirrorNodeConfig } from '../types';
@@ -31,6 +31,7 @@ export interface HederaConversationalAgentConfig {
   scheduleUserTransactionsInBytesMode?: boolean;
   modelCapability?: ModelCapability;
   mirrorNodeConfig?: MirrorNodeConfig;
+  disableLogging?: boolean;
 }
 
 /**
@@ -88,7 +89,7 @@ export class HederaConversationalAgent {
   private hederaKit: HederaAgentKit;
   private llm: BaseChatModel;
   private agentExecutor!: AgentExecutor;
-  private logger: StandardsSdkLogger;
+  private logger: Logger;
   private config: HederaConversationalAgentConfig;
   private systemMessage!: string;
 
@@ -113,9 +114,16 @@ export class HederaConversationalAgent {
       ModelCapabilityDetector.getInstance().getModelCapabilitySync(
         config.openAIModelName
       );
-    this.logger = new StandardsSdkLogger({
-      level: this.config.verbose ? 'debug' : 'info',
+
+    const shouldDisableLogs =
+      this.config.disableLogging || process.env.DISABLE_LOGS === 'true';
+    const defaultLogLevel = this.config.verbose ? 'debug' : 'info';
+    const logLevel = shouldDisableLogs ? 'silent' : defaultLogLevel;
+
+    this.logger = new Logger({
+      level: logLevel,
       module: 'HederaConversationalAgent',
+      silent: shouldDisableLogs,
     });
 
     this.hederaKit = new HederaAgentKit(
@@ -128,7 +136,8 @@ export class HederaConversationalAgent {
       this.config.openAIModelName ||
         process.env.OPENAI_MODEL_NAME ||
         'gpt-4o-mini',
-      this.config.mirrorNodeConfig
+      this.config.mirrorNodeConfig,
+      shouldDisableLogs
     );
 
     if (this.config.llm) {

@@ -1,6 +1,6 @@
 {
   "name": "@hashgraphonline/hedera-agent-kit",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "type": "module",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.js",
@@ -69,7 +69,7 @@
     "@hashgraph/sdk": "^2.64.5",
     "@hashgraphonline/hashinal-wc": "^1.0.96",
     "@hashgraphonline/standards-agent-kit": "^0.0.28-canary.2",
-    "@hashgraphonline/standards-sdk": "^0.0.112-canary.4",
+    "@hashgraphonline/standards-sdk": "^0.0.114",
     "@langchain/core": "^0.3.55",
     "@langchain/langgraph": "^0.2.71",
     "@langchain/openai": "^0.5.11",

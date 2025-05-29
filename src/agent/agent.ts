@@ -67,13 +67,19 @@ export class HederaAgentKit {
     scheduleUserTransactionsInBytesMode: boolean = true,
     modelCapability: ModelCapability = ModelCapability.MEDIUM,
     modelName?: string,
-    mirrorNodeConfig?: MirrorNodeConfig
+    mirrorNodeConfig?: MirrorNodeConfig,
+    disableLogging: boolean = false
   ) {
     this.signer = signer;
     this.network = this.signer.getNetwork();
+
+    const shouldDisableLogs =
+      disableLogging || process.env.DISABLE_LOGS === 'true';
+
     this.logger = new Logger({
-      level: 'info',
+      level: shouldDisableLogs ? 'silent' : 'info',
       module: 'HederaAgentKit',
+      silent: shouldDisableLogs,
     });
 
     if (this.network === 'mainnet') {
@@ -91,8 +97,9 @@ export class HederaAgentKit {
     this.mirrorNode = new HederaMirrorNode(
       this.network,
       new Logger({
-        level: 'info',
+        level: shouldDisableLogs ? ('silent' as any) : 'info',
         module: 'HederaAgentKit-MirrorNode',
+        silent: shouldDisableLogs,
       }),
       mirrorNodeConfig
     );

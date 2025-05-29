@@ -42,9 +42,13 @@ export abstract class BaseServiceBuilder {
    */
   constructor(protected readonly hederaKit: HederaAgentKit) {
     this.kit = hederaKit;
+
+    const shouldDisableLogs = process.env.DISABLE_LOGS === 'true';
+
     this.logger = new Logger({
       module: 'ServiceBuilder',
-      level: 'info',
+      level: shouldDisableLogs ? 'silent' : 'info',
+      silent: shouldDisableLogs,
     });
   }
 
@@ -186,8 +190,9 @@ export abstract class BaseServiceBuilder {
 
       if (this.kit.userAccountId) {
         try {
-          const userAccountInfo = await this.kit.query().getAccountInfo(
-            AccountId.fromString(this.kit.userAccountId)
+          const mirrorNode = this.kit.mirrorNode;
+          const userAccountInfo = await mirrorNode.requestAccount(
+            this.kit.userAccountId
           );
           if (userAccountInfo?.key?.key) {
             adminKeyList.push(PublicKey.fromString(userAccountInfo.key.key));
