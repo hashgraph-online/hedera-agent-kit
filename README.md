@@ -1,4 +1,4 @@
-# hedera-agent-kit
+# @hashgraph-online/hedera-agent-kit
 
 Build LLM-powered applications that interact with the Hedera Network. Create conversational agents that can understand user requests in natural language and execute Hedera transactions, or build backend systems that leverage AI for on-chain operations.
 
@@ -15,7 +15,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
 
 ## Table of Contents
 
-- [hedera-agent-kit](#hedera-agent-kit)
+- [@hashgraph-online/hedera-agent-kit](#hashgraph-onlinehedera-agent-kit)
   - [Key Features](#key-features)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
@@ -30,6 +30,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
       - [3. Schedule IDs (scheduled transactions)](#3-schedule-ids-scheduled-transactions)
     - [Working with Chat History](#working-with-chat-history)
     - [Example: Complete Prompt Handling Flow](#example-complete-prompt-handling-flow)
+      - [Scheduled Transaction Implementation](#scheduled-transaction-implementation)
   - [Available Tools](#available-tools)
     - [Account Management Tools](#account-management-tools)
     - [HBAR Transaction Tools](#hbar-transaction-tools)
@@ -44,15 +45,26 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
     - [HederaConversationalAgent Options](#hederaconversationalagent-options)
   - [Architecture Diagram](#architecture-diagram)
   - [Local Development](#local-development)
+  - [Related Projects and Advanced Patterns](#related-projects-and-advanced-patterns)
+    - [Agent-to-Agent Communication](#agent-to-agent-communication)
+    - [Standards SDK](#standards-sdk)
   - [Contributing](#contributing)
   - [License](#license)
 
 ## Installation
 
 ```bash
-npm install hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+npm install @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
 # or
-yarn add hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+yarn add @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+```
+
+For frontend integration with WalletConnect:
+
+```bash
+npm install @hashgraphonline/hashinal-wc
+# or
+yarn add @hashgraphonline/hashinal-wc
 ```
 
 _(Ensure you have `dotenv` for environment variable management if you use `.env` files.)_
@@ -95,8 +107,8 @@ The demo code is in `examples/langchain-demo.ts`. Here is a simplified excerpt:
 ```typescript
 import * as dotenv from 'dotenv';
 dotenv.config();
-import { ServerSigner } from '../src/signer/server-signer';
-import { HederaConversationalAgent } from '../src/agent/conversational-agent';
+import { ServerSigner } from '@hashgraphonline/hedera-agent-kit';
+import { HederaConversationalAgent } from '@hashgraphonline/hedera-agent-kit';
 
 async function main() {
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
@@ -213,10 +225,19 @@ When the agent generates transaction bytes, you'll need to present them to the u
 const response = await handleUserMessage('Transfer 10 HBAR to 0.0.12345');
 
 if (response.transactionBytes) {
-  // Option 1: Connect to HashPack or other wallet
-  const signedTxResponse = await hashConnect.signTransaction(
-    response.transactionBytes
-  );
+  // Option 1: Using Hashinal WalletConnect SDK
+  import { HashinalsWalletConnectSDK } from '@hashgraphonline/hashinal-wc';
+  import { Transaction } from '@hashgraph/sdk';
+
+  const sdk = HashinalsWalletConnectSDK.getInstance();
+  await sdk.init(projectId, metadata);
+  await sdk.connect();
+
+  // Sign and submit the transaction
+  const txBytes = Buffer.from(response.transactionBytes, 'base64');
+  const transaction = Transaction.fromBytes(txBytes);
+  const receipt = await sdk.executeTransaction(transaction);
+  console.log('Transaction executed:', receipt);
 
   // Option 2: If you have the user's key in your app
   const userSigner = new ServerSigner(userAccountId, userPrivateKey, network);
@@ -336,6 +357,140 @@ async function handleHederaConversation() {
 }
 ```
 
+#### Scheduled Transaction Implementation
+
+When working with scheduled transactions, you can check their status and handle approvals programmatically:
+
+```typescript
+import { HashinalsWalletConnectSDK } from '@hashgraphonline/hashinal-wc';
+import { ScheduleSignTransaction } from '@hashgraph/sdk';
+import {
+  HederaMirrorNode,
+  TransactionParser,
+} from '@hashgraphonline/standards-sdk';
+
+async function handleScheduledTransaction(
+  scheduleId: string,
+  network: 'mainnet' | 'testnet'
+) {
+  // Initialize WalletConnect SDK
+  const sdk = HashinalsWalletConnectSDK.getInstance();
+  await sdk.init(projectId, metadata);
+  await sdk.connect();
+
+  // Create mirror node instance
+  const mirrorNode = new HederaMirrorNode(network);
+
+  // Fetch schedule information
+  const scheduleInfo = await mirrorNode.getScheduleInfo(scheduleId);
+
+  if (!scheduleInfo) {
+    throw new Error('Schedule not found');
+  }
+
+  // Check if already executed
+  if (scheduleInfo.executed_timestamp) {
+    console.log(
+      'Transaction already executed at:',
+      scheduleInfo.executed_timestamp
+    );
+    return { status: 'executed', timestamp: scheduleInfo.executed_timestamp };
+  }
+
+  // Parse transaction details
+  const transactionDetails = TransactionParser.parseScheduleResponse({
+    transaction_body: scheduleInfo.transaction_body,
+    memo: scheduleInfo.memo,
+  });
+
+  console.log('Transaction Details:', {
+    type: transactionDetails.humanReadableType,
+    transfers: transactionDetails.transfers,
+    memo: transactionDetails.memo,
+    expirationTime: scheduleInfo.expiration_time,
+  });
+
+  // Create and execute the ScheduleSign transaction
+  const scheduleSignTx = new ScheduleSignTransaction().setScheduleId(
+    scheduleId
+  );
+
+  try {
+    // For scheduled transactions, disable signer since it's already configured
+    const receipt = await sdk.executeTransaction(scheduleSignTx, false);
+    console.log('Schedule signed successfully:', receipt);
+    return { status: 'signed', receipt };
+  } catch (error) {
+    console.error('Failed to sign schedule:', error);
+    throw error;
+  }
+}
+
+// Usage with HederaConversationalAgent
+async function exampleScheduledTransactionFlow() {
+  const agent = new HederaConversationalAgent(agentSigner, {
+    operationalMode: 'provideBytes',
+    userAccountId: userAccountId,
+    scheduleUserTransactionsInBytesMode: true, // Auto-schedule user transactions
+  });
+
+  // User requests a scheduled transaction
+  const response = await agent.processMessage(
+    'Schedule a transfer of 10 HBAR from my account to 0.0.12345 for tomorrow'
+  );
+
+  if (response.scheduleId) {
+    console.log(
+      'Transaction scheduled with ID:',
+      response.scheduleId.toString()
+    );
+
+    // Handle the scheduled transaction approval
+    const result = await handleScheduledTransaction(
+      response.scheduleId.toString(),
+      'testnet'
+    );
+
+    console.log('Schedule handling result:', result);
+  }
+}
+
+// Polling example - check schedule status periodically
+async function pollScheduleStatus(
+  scheduleId: string,
+  network: 'mainnet' | 'testnet'
+) {
+  const mirrorNode = new HederaMirrorNode(network);
+
+  const checkStatus = async () => {
+    const scheduleInfo = await mirrorNode.getScheduleInfo(scheduleId);
+
+    if (scheduleInfo?.executed_timestamp) {
+      console.log('Schedule executed!');
+      clearInterval(intervalId);
+
+      // Get the executed transaction details
+      const executedTx = await mirrorNode.getTransactionByTimestamp(
+        scheduleInfo.executed_timestamp
+      );
+      console.log('Executed transaction:', executedTx);
+    } else if (scheduleInfo?.deleted_timestamp) {
+      console.log('Schedule was deleted');
+      clearInterval(intervalId);
+    } else {
+      console.log('Schedule still pending...');
+    }
+  };
+
+  // Check immediately and then every 5 seconds
+  await checkStatus();
+  const intervalId = setInterval(checkStatus, 5000);
+
+  // Return cleanup function
+  return () => clearInterval(intervalId);
+}
+```
+
 ## Available Tools
 
 The Hedera Agent Kit provides a comprehensive set of tools organized by service type. These tools can be used both by the conversational agent and programmatically.
@@ -425,7 +580,10 @@ The Hedera Agent Kit provides a comprehensive set of tools organized by service 
 For more programmatic control, you can use `HederaAgentKit` directly instead of the conversational agent:
 
 ```typescript
-import { HederaAgentKit, ServerSigner } from 'hedera-agent-kit';
+import {
+  HederaAgentKit,
+  ServerSigner,
+} from '@hashgraphonline/hedera-agent-kit';
 import { Hbar } from '@hashgraph/sdk';
 
 async function useKitDirectly() {
@@ -471,7 +629,10 @@ async function useKitDirectly() {
 Extend the agent's capabilities with custom plugins:
 
 ```typescript
-import { HederaAgentKit, ServerSigner } from 'hedera-agent-kit';
+import {
+  HederaAgentKit,
+  ServerSigner,
+} from '@hashgraphonline/hedera-agent-kit';
 
 async function useCustomPlugin() {
   const signer = new ServerSigner(
@@ -585,6 +746,22 @@ npm run test
 ```bash
 npm run demo:langchain
 ```
+
+## Related Projects and Advanced Patterns
+
+### Agent-to-Agent Communication
+
+While this kit focuses on user-to-agent interactions, the HCS-10 OpenConvAI standard enables autonomous agent-to-agent communication on Hedera. HCS-10 defines protocols for:
+
+- AI agents discovering and connecting with each other
+- Approval-required transaction workflows between agents
+- Decentralized AI agent marketplaces
+
+For implementation examples, see [@standards-sdk/demo/hcs-10/transact-agent.ts](https://github.com/hashgraph-online/standards-sdk/blob/main/demo/hcs-10/transact-agent.ts).
+
+### Standards SDK
+
+The [@hashgraphonline/standards-sdk](https://github.com/hashgraph-online/standards-sdk) provides implementations of various Hedera standards including HCS-1 through HCS-11, useful for building more complex decentralized applications.
 
 ## Contributing
 
