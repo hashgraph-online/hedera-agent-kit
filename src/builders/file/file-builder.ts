@@ -7,6 +7,7 @@ import {
   PublicKey,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
+import { detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 import {
   CreateFileParams,
   AppendFileParams,
@@ -47,7 +48,8 @@ export class FileBuilder extends BaseServiceBuilder {
       const publicKeys: PublicKey[] = params.keys
         .map((keyInput) => {
           if (typeof keyInput === 'string') {
-            return PrivateKey.fromString(keyInput).publicKey;
+            const keyDetection = detectKeyTypeFromString(keyInput);
+            return keyDetection.privateKey.publicKey;
           } else if (keyInput instanceof PublicKey) {
             return keyInput;
           }
@@ -129,7 +131,8 @@ export class FileBuilder extends BaseServiceBuilder {
       const publicKeys: PublicKey[] = params.keys
         .map((keyInput) => {
           if (typeof keyInput === 'string') {
-            return PrivateKey.fromString(keyInput).publicKey;
+            const keyDetection = detectKeyTypeFromString(keyInput);
+            return keyDetection.privateKey.publicKey;
           } else if (keyInput instanceof PublicKey) {
             return keyInput;
           }

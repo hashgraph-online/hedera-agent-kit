@@ -8,10 +8,12 @@ if (typeof self === 'undefined') {
 import * as dotenv from 'dotenv';
 dotenv.config();
 
+process.env.DISABLE_LOGS = 'true';
+
+import './hedera-logger-override';
+
 import { ServerSigner } from '../src/signer/server-signer';
-import {
-  Transaction,
-} from '@hashgraph/sdk';
+import { Transaction } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import * as readline from 'readline';
 import {
@@ -21,6 +23,9 @@ import {
 import { HelloWorldPlugin } from './hello-world-plugin';
 import { IPlugin } from '@hashgraphonline/standards-agent-kit';
 import { NetworkType } from '../../standards-sdk/src';
+import chalk from 'chalk';
+import gradient from 'gradient-string';
+import { enableHederaLogging } from './hedera-logger-override';
 
 function createInterface() {
   return readline.createInterface({
@@ -30,9 +35,32 @@ function createInterface() {
 }
 
 async function main() {
-  console.log(
-    'Starting Hedera Agent Kit Interactive LangChain Demo using HederaConversationalAgent...'
-  );
+  const hederaGradient = gradient(['#8259ef', '#2d84eb']);
+  const successGradient = gradient(['#3ec878', '#2d84eb']);
+  const warningColor = chalk.hex('#464646').dim;
+  const errorColor = chalk.hex('#464646');
+  const primaryPurple = chalk.hex('#8259ef').bold;
+  const primaryBlue = chalk.hex('#2d84eb').bold;
+  const primaryGreen = chalk.hex('#3ec878').bold;
+  const charcoal = chalk.hex('#464646');
+
+  const banner = `
+${hederaGradient(
+  '╔═══════════════════════════════════════════════════════════════╗'
+)}
+${hederaGradient(
+  '║                      HEDERA AGENT KIT                        ║'
+)}
+${hederaGradient(
+  '║                   Interactive LangChain Demo                 ║'
+)}
+${hederaGradient(
+  '╚═══════════════════════════════════════════════════════════════╝'
+)}
+`;
+
+  console.log(banner);
+  console.log(primaryGreen('🚀 Initializing Hedera Agent Kit...\n'));
 
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
   const operatorKey = process.env.HEDERA_PRIVATE_KEY;
@@ -48,20 +76,7 @@ async function main() {
     );
   }
   if (!openaiApiKey) {
-    console.warn(
-      'OPENAI_API_KEY is not explicitly checked here, ensure it is set for default LLM in ConversationalAgent.'
-    );
-  }
-
-  console.log(`Using Agent Operator ID: ${operatorId} on ${network}`);
-  if (userAccountId && userPrivateKey) {
-    console.log(
-      `User Account ID (for user-signed transactions): ${userAccountId} is configured.`
-    );
-  } else {
-    console.warn(
-      'USER_ACCOUNT_ID and/or USER_PRIVATE_KEY are not set in .env. User-signed execution will not be available.'
-    );
+    throw new Error('OPENAI_API_KEY must be set in .env');
   }
 
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
@@ -78,10 +93,67 @@ async function main() {
     },
   });
 
+  const loadingFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let frameIndex = 0;
+  const loadingInterval = setInterval(() => {
+    process.stdout.write(
+      `\r${primaryBlue(
+        `${loadingFrames[frameIndex]} Initializing Hedera Agent Kit...`
+      )}`
+    );
+    frameIndex = (frameIndex + 1) % loadingFrames.length;
+  }, 100);
+
   await conversationalAgent.initialize();
-  console.log(
-    'HederaConversationalAgent initialized. Type "exit" to quit, or try "say hello to Hedera".'
-  );
+
+  setTimeout(() => {
+    clearInterval(loadingInterval);
+    process.stdout.write('\r' + ' '.repeat(50) + '\r');
+
+    console.log(successGradient('✅ Hedera Agent Kit Ready!'));
+    console.log(
+      `${primaryPurple('🤖 AI Agent:')} ${chalk.white(
+        'Connected and operational'
+      )}`
+    );
+    console.log(
+      `${primaryBlue('🌐 Network:')} ${chalk.white(network.toUpperCase())}`
+    );
+    console.log(
+      `${primaryPurple('🔗 Agent Account:')} ${chalk.white(operatorId)}`
+    );
+    if (userAccountId && userPrivateKey) {
+      console.log(
+        `${primaryGreen('👤 User Account:')} ${chalk.white(
+          userAccountId
+        )} ${charcoal.dim('(configured)')}`
+      );
+    } else {
+      console.log(`${charcoal.dim('👤 User Account: Not configured')}`);
+    }
+    console.log(
+      `${primaryGreen('🔧 Tools:')} ${chalk.white('81 Hedera tools loaded')}`
+    );
+    console.log();
+    console.log(
+      primaryBlue.dim('💬 Type "exit" to quit, or try "say hello to Hedera"')
+    );
+    console.log(
+      primaryPurple.dim(
+        '💡 Try: "create an account", "check my balance", or "send 1 HBAR to 0.0.123"'
+      )
+    );
+    console.log();
+
+    console.log(
+      charcoal.dim(
+        '📊 Initialization logs suppressed for clean startup experience'
+      )
+    );
+    console.log();
+    enableHederaLogging();
+    askQuestion();
+  }, 1000);
 
   const chatHistory: Array<{ type: 'human' | 'ai'; content: string }> = [];
   const rl = createInterface();
@@ -92,7 +164,9 @@ async function main() {
   ) {
     if (!userAccountId || !userPrivateKey) {
       console.log(
-        'Agent > USER_ACCOUNT_ID and USER_PRIVATE_KEY are not set. Cannot execute with user key.'
+        warningColor(
+          'Agent > USER_ACCOUNT_ID and USER_PRIVATE_KEY are not set. Cannot execute with user key.'
+        )
       );
       chatHistory.push({
         type: 'ai',
@@ -104,7 +178,9 @@ async function main() {
       chatHistory.push({ type: 'human', content: originalPromptForHistory });
 
     console.log(
-      `Agent > Preparing and executing transaction with user account ${userAccountId}...`
+      `${primaryBlue('Agent >')} ${primaryPurple(
+        `Preparing and executing transaction with user account ${userAccountId}...`
+      )}`
     );
     try {
       const userSigner = new ServerSigner(
@@ -136,13 +212,18 @@ async function main() {
       const successMsg = `Transaction executed with your key. Receipt: ${JSON.stringify(
         receipt.toJSON()
       )}`;
-      console.log('Agent > ', successMsg);
+      console.log(`${primaryGreen('Agent >')} ${primaryGreen(successMsg)}`);
       chatHistory.push({ type: 'ai', content: successMsg });
     } catch (e: any) {
       const errorMsg = `Sorry, I encountered an error executing that with your key: ${
         e.message || String(e)
       }`;
-      console.error('Agent > Error executing transaction with user key:', e);
+      console.error(
+        `${errorColor('Agent >')} ${charcoal.dim(
+          'Error executing transaction with user key:'
+        )}`,
+        e
+      );
       chatHistory.push({ type: 'ai', content: errorMsg });
     }
   }
@@ -159,12 +240,24 @@ async function main() {
       await conversationalAgent.processMessage(userInput, chatHistory);
 
     if (agentResponse.notes) {
-      console.log('Agent Notes > ', agentResponse.notes.map(note => `- ${note}`).join('\n'));
+      console.log(
+        `${primaryBlue('Agent Notes >')} ${charcoal.dim(
+          agentResponse.notes.map((note) => `- ${note}`).join('\n')
+        )}`
+      );
     }
 
-    console.log('Agent Message > ', agentResponse.message);
+    console.log(
+      `${primaryPurple('Agent Message >')} ${chalk.white(
+        agentResponse.message
+      )}`
+    );
     if (agentResponse.output !== agentResponse.message) {
-      console.log('Agent Tool Output (JSON) > ', agentResponse.output);
+      console.log(
+        `${primaryBlue('Agent Tool Output (JSON) >')} ${charcoal.dim(
+          agentResponse.output
+        )}`
+      );
     }
     chatHistory.push({
       type: 'ai',
@@ -174,11 +267,19 @@ async function main() {
     if (agentResponse.scheduleId) {
       const scheduleIdToSign = agentResponse.scheduleId;
       rl.question(
-        `Agent > Transaction scheduled with ID ${scheduleIdToSign}. Sign and submit with your account ${userAccountId}? (y/n): `,
+        `${primaryPurple('Agent >')} ${primaryGreen(
+          `Transaction scheduled with ID ${scheduleIdToSign}`
+        )}. ${primaryBlue(
+          `Sign and submit with your account ${userAccountId}?`
+        )} ${charcoal.dim('(y/n):')} `,
         async (answer) => {
           if (answer.toLowerCase() === 'y') {
             const followUpInput = `Sign and submit scheduled transaction ${scheduleIdToSign}`;
-            console.log(`\nUser (follow-up) > ${followUpInput}`);
+            console.log(
+              `\n${primaryGreen('User (follow-up) >')} ${chalk.white(
+                followUpInput
+              )}`
+            );
             await processAndRespond(followUpInput, true);
           } else {
             chatHistory.push({
@@ -197,7 +298,11 @@ async function main() {
         const finalBytes = agentResponse.transactionBytes;
         const originalPromptForHistory = isFollowUp ? undefined : userInput;
         rl.question(
-          `Agent > Transaction bytes received. Sign and execute with YOUR account ${userAccountId}? (y/n): `,
+          `${primaryPurple('Agent >')} ${primaryGreen(
+            'Transaction bytes received'
+          )}. ${primaryBlue(
+            `Sign and execute with YOUR account ${userAccountId}?`
+          )} ${charcoal.dim('(y/n):')} `,
           async (answer) => {
             if (answer.toLowerCase() === 'y') {
               await handleUserSignedExecution(
@@ -218,41 +323,54 @@ async function main() {
     }
 
     if (agentResponse.error) {
-      console.error('Agent > Error reported by agent:', agentResponse.error);
+      console.error(
+        `${errorColor('Agent >')} ${charcoal.dim('Error reported by agent:')}`,
+        agentResponse.error
+      );
     }
     askQuestion();
   }
 
   function askQuestion() {
     setTimeout(() => {
-      rl.question('User > ', async (input) => {
-      if (input.toLowerCase() === 'exit') {
-        rl.close();
-        console.log('\nInteractive demo finished.');
-        return;
-      }
-      try {
-        console.log(`\nInvoking agent with: "${input}"`);
-        await processAndRespond(input);
-      } catch (e: any) {
-        const errorMsg = e.message || String(e);
-        console.error('Error during agent invocation loop:', errorMsg);
-        if (
-          chatHistory[chatHistory.length - 1]?.content !== input ||
-          chatHistory[chatHistory.length - 1]?.type !== 'human'
-        ) {
-          chatHistory.push({ type: 'human', content: input });
+      rl.question(`${primaryGreen('User >')} `, async (input) => {
+        if (input.toLowerCase() === 'exit') {
+          rl.close();
+          console.log(
+            `\n${hederaGradient(
+              '🎉 Interactive demo finished. Thank you for using Hedera Agent Kit!'
+            )}`
+          );
+          return;
         }
-        chatHistory.push({
-          type: 'ai',
-          content: `Sorry, a critical error occurred: ${errorMsg}`,
-        });
-        askQuestion();
-      }
-    });
+        try {
+          console.log(
+            `\n${primaryBlue('🤖 Invoking agent with:')} ${chalk.white(
+              `"${input}"`
+            )}`
+          );
+          await processAndRespond(input);
+        } catch (e: any) {
+          const errorMsg = e.message || String(e);
+          console.error(
+            `${errorColor('Error during agent invocation loop:')}`,
+            errorMsg
+          );
+          if (
+            chatHistory[chatHistory.length - 1]?.content !== input ||
+            chatHistory[chatHistory.length - 1]?.type !== 'human'
+          ) {
+            chatHistory.push({ type: 'human', content: input });
+          }
+          chatHistory.push({
+            type: 'ai',
+            content: `Sorry, a critical error occurred: ${errorMsg}`,
+          });
+          askQuestion();
+        }
+      });
     }, 100);
   }
-  askQuestion();
 }
 
 main().catch(console.error);

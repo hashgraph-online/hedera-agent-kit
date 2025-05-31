@@ -1,4 +1,5 @@
-import { Key, PrivateKey, PublicKey } from '@hashgraph/sdk';
+import { Key, PublicKey } from '@hashgraph/sdk';
+import { detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 
 /**
  * Parses a string representation of a key into an SDK Key object.
@@ -7,10 +8,12 @@ import { Key, PrivateKey, PublicKey } from '@hashgraph/sdk';
  * @returns An SDK Key object or null if parsing fails.
  */
 export function parseKey(keyString: string): Key | null {
-  if (!keyString) return null;
+  if (!keyString) {
+    return null;
+  }
   try {
-    const privateKey = PrivateKey.fromString(keyString);
-    return privateKey.publicKey;
+    const keyDetection = detectKeyTypeFromString(keyString);
+    return keyDetection.privateKey.publicKey;
   } catch {
     try {
       return PublicKey.fromString(keyString);

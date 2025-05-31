@@ -11,6 +11,7 @@ import {
   ContractFunctionResult,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
+import { detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 
 import {
   CreateContractParams,
@@ -57,7 +58,8 @@ export class ScsBuilder extends BaseServiceBuilder {
 
     if (params.adminKey) {
       if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(PrivateKey.fromString(params.adminKey));
+        const keyDetection = detectKeyTypeFromString(params.adminKey);
+        transaction.setAdminKey(keyDetection.privateKey);
       } else {
         transaction.setAdminKey(params.adminKey);
       }
@@ -171,7 +173,8 @@ export class ScsBuilder extends BaseServiceBuilder {
 
     if (params.adminKey) {
       if (typeof params.adminKey === 'string') {
-        transaction.setAdminKey(PrivateKey.fromString(params.adminKey));
+        const keyDetection = detectKeyTypeFromString(params.adminKey);
+        transaction.setAdminKey(keyDetection.privateKey);
       } else {
         transaction.setAdminKey(params.adminKey);
       }

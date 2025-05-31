@@ -3,7 +3,6 @@ import {
   AccountUpdateTransaction,
   AccountDeleteTransaction,
   Hbar,
-  PrivateKey,
   TransferTransaction,
   Long,
   AccountAllowanceApproveTransaction,
@@ -16,6 +15,7 @@ import {
   ScheduleSignTransaction,
 } from '@hashgraph/sdk';
 import BigNumber from 'bignumber.js';
+import { detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 import {
   CreateAccountParams,
   HbarTransferParams,
@@ -61,9 +61,10 @@ export class AccountBuilder extends BaseServiceBuilder {
           'Received null for key in createAccount. A key or alias is typically required.'
         );
       } else if (typeof params.key === 'string') {
-        transaction.setKey(PrivateKey.fromString(params.key));
+        const keyDetection = detectKeyTypeFromString(params.key);
+        transaction.setKeyWithoutAlias(keyDetection.privateKey);
       } else {
-        transaction.setKey(params.key as Key);
+        transaction.setKeyWithoutAlias(params.key as Key);
       }
     }
 
@@ -315,7 +316,8 @@ export class AccountBuilder extends BaseServiceBuilder {
         this.logger.warn('Received null for key, skipping update for key.');
       } else if (typeof params.key === 'string') {
         try {
-          transaction.setKey(PrivateKey.fromString(params.key));
+          const keyDetection = detectKeyTypeFromString(params.key);
+          transaction.setKey(keyDetection.privateKey);
         } catch (e) {
           this.logger.error(`Failed to parse key string: ${params.key}`, e);
           throw new Error(`Invalid key string provided: ${params.key}`);

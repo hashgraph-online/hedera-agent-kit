@@ -13,9 +13,7 @@ export default defineConfig({
             exclude: [
                 'src/types/**/*.ts',
                 'src/**/index.ts',
-                'src/**/*.d.ts',
-                'src/langchain/tools/common/base-hedera-query-tool.ts',
-                'src/langchain/tools/common/base-hedera-transaction-tool.ts'
+                'src/**/*.d.ts'
             ],
         },
     },

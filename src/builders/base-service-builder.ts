@@ -13,7 +13,7 @@ import {
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 import { AbstractSigner } from '../signer/abstract-signer';
-import { Logger } from '@hashgraphonline/standards-sdk';
+import { Logger, detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 import type { HederaAgentKit } from '../agent/agent';
 
 /**
@@ -438,7 +438,8 @@ export abstract class BaseServiceBuilder {
             '[BaseServiceBuilder.parseKey] Attempting to parse key string as PrivateKey to derive PublicKey. This is generally not recommended for public-facing keys.',
             { error: error.message }
           );
-          return PrivateKey.fromString(keyInput);
+          const keyDetection = detectKeyTypeFromString(keyInput);
+          return keyDetection.privateKey;
         } catch (e2: unknown) {
           const error2 = e2 as Error;
           this.logger.error(
