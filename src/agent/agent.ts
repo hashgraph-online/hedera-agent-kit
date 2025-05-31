@@ -18,6 +18,8 @@ import { HederaMirrorNode, Logger } from '@hashgraphonline/standards-sdk';
 import {
   IPlugin,
   GenericPluginContext,
+  OpenConvaiState,
+  HCS10Client,
 } from '@hashgraphonline/standards-agent-kit';
 import { Tool } from '@langchain/core/tools';
 import { HcsBuilder } from '../builders/hcs/hcs-builder';
@@ -29,6 +31,7 @@ import { QueryBuilder } from '../builders/query/query-builder';
 import { ExecuteResult } from '../builders/base-service-builder';
 import { createHederaTools } from '../langchain';
 import { ModelCapability } from '../types/model-capability';
+import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
 
 export interface PluginConfig {
   plugins?: IPlugin[];
@@ -167,10 +170,24 @@ export class HederaAgentKit {
     const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
       return plugin.getTools();
     }) as unknown as Tool[];
+    const openConvAIPlugin = new OpenConvAIPlugin();
+    await openConvAIPlugin.initialize({
+      logger: this.logger,
+      config: this.pluginConfigInternal?.appConfig || {},
+      client: new HCS10Client(
+        this.signer.getAccountId().toString(),
+        this.signer.getOperatorPrivateKey()?.toStringRaw(),
+        this.network,
+      ),
+      stateManager: new OpenConvaiState(),
+    });
+
+    const hcs10Tools = openConvAIPlugin.getTools();
 
     this.aggregatedTools = [
       ...coreKitTools,
       ...pluginTools,
+      ...hcs10Tools,
     ] as unknown as Tool[];
 
     this.isInitialized = true;

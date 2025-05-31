@@ -10,7 +10,6 @@ import {
   PaymentStatus,
   PaymentHistory,
   CreditHistory,
-  CreditTransaction,
   PricingConfiguration,
   AuthChallenge,
   AuthSignatureParams,
@@ -47,6 +46,19 @@ export class MCPClient {
   private clientName: string;
   private clientVersion: string;
 
+  private static instance: MCPClient | null = null;
+
+  public static getInstance(config: MCPClientConfig = {}): MCPClient {
+    if (!MCPClient.instance) {
+      MCPClient.instance = new MCPClient(config);
+    }
+    return MCPClient.instance;
+  }
+
+  public static setInstance(instance: MCPClient | null): void {
+    MCPClient.instance = instance;
+  }
+
   constructor(config: MCPClientConfig = {}) {
     this.serverUrl =
       config.serverUrl ||
@@ -80,10 +92,13 @@ export class MCPClient {
     }
     this.apiKey = apiKey;
     if (this.isConnected) {
-      this.logger.debug('API key changed, disconnecting to force reconnection', {
-        hadApiKey: !!this.apiKey,
-        hasNewApiKey: !!apiKey,
-      });
+      this.logger.debug(
+        'API key changed, disconnecting to force reconnection',
+        {
+          hadApiKey: !!this.apiKey,
+          hasNewApiKey: !!apiKey,
+        }
+      );
       this.isConnected = false;
       this.client = null;
     }
@@ -139,7 +154,7 @@ export class MCPClient {
         }
       );
 
-      await this.client.connect(transport);
+      await this.client.connect(transport as any);
 
       this.isConnected = true;
       this.logger.info('Connected to MCP server with streaming transport', {
@@ -363,9 +378,12 @@ export class MCPClient {
    * @returns Authentication challenge details
    */
   async requestAuthChallenge(hederaAccountId: string): Promise<AuthChallenge> {
-    const result = await this.callTool<AuthChallenge>('request_auth_challenge', {
-      hederaAccountId,
-    });
+    const result = await this.callTool<AuthChallenge>(
+      'request_auth_challenge',
+      {
+        hederaAccountId,
+      }
+    );
     if (result.error) {
       throw new Error(result.error);
     }
@@ -607,18 +625,16 @@ export class MCPClient {
   }
 }
 
-let defaultMCPClient: MCPClient | null = null;
-
 /**
  * Gets the singleton MCP client instance for communicating with the Hedera MCP Server
  * @param config Optional configuration to override defaults
  * @returns The singleton MCPClient instance
  */
 export function getMCPClient(config?: MCPClientConfig): MCPClient {
-  if (!defaultMCPClient) {
-    defaultMCPClient = new MCPClient(config);
+  if (!MCPClient.getInstance()) {
+    MCPClient.getInstance(config);
   }
-  return defaultMCPClient;
+  return MCPClient.getInstance();
 }
 
 /**
@@ -626,8 +642,8 @@ export function getMCPClient(config?: MCPClientConfig): MCPClient {
  * @returns A promise that resolves when the client has been disconnected and reset
  */
 export async function resetMCPClient(): Promise<void> {
-  if (defaultMCPClient) {
-    await defaultMCPClient.disconnect();
-    defaultMCPClient = null;
+  if (MCPClient.getInstance()) {
+    await MCPClient.getInstance().disconnect();
+    MCPClient.setInstance(null);
   }
 }

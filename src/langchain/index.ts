@@ -2,7 +2,6 @@ import { StructuredTool } from '@langchain/core/tools';
 import HederaAgentKit from '../agent/agent';
 import * as dotenv from 'dotenv';
 import { PrivateKey } from '@hashgraph/sdk';
-import { initializeHCS10Client } from '@hashgraphonline/standards-agent-kit';
 import { HederaCreateTopicTool } from './tools/hcs/create-topic-tool';
 import { HederaDeleteTopicTool } from './tools/hcs/delete-topic-tool';
 import { HederaSubmitMessageTool } from './tools/hcs/submit-message-tool';
@@ -175,50 +174,6 @@ export async function createHederaTools(
   hederaKit.logger.info(
     `Created ${hederaTools.length} tools with model capability: ${modelCapability}`
   );
-
-  try {
-    let operatorKeyForStandards: PrivateKey | undefined;
-    if (operatorKey) {
-      operatorKeyForStandards = operatorKey;
-    } else {
-      hederaKit.logger.warn(
-        'HEDERA_PRIVATE_KEY not found in env, HCS-10 tools might not initialize if signer does not expose private key directly.'
-      );
-    }
-
-    if (operatorId && operatorKeyForStandards) {
-      const networkTypeForStandards =
-        hederaKit.network === 'mainnet' ? 'mainnet' : 'testnet';
-
-      const standardsKit = initializeHCS10Client({
-        clientConfig: {
-          operatorId: operatorId,
-          operatorKey: operatorKeyForStandards?.toStringRaw() || '',
-          network: networkTypeForStandards,
-          useEncryption: false,
-        },
-        createAllTools: true,
-      });
-
-      const standardsToolsArray = Object.values(standardsKit.tools).filter(
-        Boolean
-      );
-
-      hederaKit.logger.info(
-        `Initialized ${standardsToolsArray.length} HCS-10 tools.`
-      );
-      return [
-        ...hederaTools,
-        ...standardsToolsArray,
-      ] as unknown as StructuredTool[];
-    }
-  } catch (error: unknown) {
-    const e = error as Error;
-    hederaKit.logger.error(
-      'Failed to initialize HCS-10 Standards Agent Kit tools:',
-      e.message
-    );
-  }
 
   return hederaTools;
 }

@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { MCPClient, getMCPClient, resetMCPClient } from '../../src/mcp';
-import { PrivateKey } from '@hashgraph/sdk';
 import { Logger } from '@hashgraphonline/standards-sdk';
 import { ServerSigner } from '../../src/signer/server-signer';
 import './setup-env';

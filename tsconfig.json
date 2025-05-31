@@ -24,10 +24,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": [
-    "src/**/*"
-
-    // "tests/**/*" // Temporarily excluded to allow Vite build to pass for src
-  ],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }

@@ -8,8 +8,6 @@ if (typeof self === 'undefined') {
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-process.env.DISABLE_LOGS = 'true';
-
 import './hedera-logger-override';
 
 import { ServerSigner } from '../src/signer/server-signer';
@@ -21,6 +19,7 @@ import {
   AgentResponse,
 } from '../src/agent/conversational-agent';
 import { HelloWorldPlugin } from './hello-world-plugin';
+import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
 import { IPlugin } from '@hashgraphonline/standards-agent-kit';
 import { NetworkType } from '../../standards-sdk/src';
 import chalk from 'chalk';

@@ -116,7 +116,7 @@ export interface AuthChallenge {
   error?: string;
 }
 
-export interface AuthSignatureParams {
+export interface AuthSignatureParams extends Record<string, unknown> {
   challengeId: string;
   hederaAccountId: string;
   signature: string;
@@ -209,7 +209,7 @@ export interface ServerInfo {
   } | null;
 }
 
-export interface GenerateTransactionParams {
+export interface GenerateTransactionParams extends Record<string, unknown> {
   operation: string;
   parameters: Record<string, any>;
   signerAccountId?: string;
@@ -229,7 +229,7 @@ export interface GenerateTransactionResult {
   request?: string;
 }
 
-export interface ScheduleTransactionParams {
+export interface ScheduleTransactionParams extends Record<string, unknown> {
   operation: string;
   parameters: Record<string, any>;
   scheduleMemo?: string;
@@ -253,7 +253,7 @@ export interface ScheduleTransactionResult {
   request?: string;
 }
 
-export interface ExecuteTransactionParams {
+export interface ExecuteTransactionParams extends Record<string, unknown> {
   operation: string;
   parameters: Record<string, any>;
 }
@@ -271,7 +271,7 @@ export interface ExecuteTransactionResult {
   request?: string;
 }
 
-export interface ProcessPaymentParams {
+export interface ProcessPaymentParams extends Record<string, unknown> {
   transactionId: string;
   payerAccountId: string;
   amountHbar: number;
@@ -302,7 +302,7 @@ export interface ProfileRefreshResult {
   error?: string;
 }
 
-export interface ExecuteQueryParams {
+export interface ExecuteQueryParams extends Record<string, unknown> {
   query: string;
   parameters: Record<string, any>;
 }
