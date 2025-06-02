@@ -40,6 +40,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
     - [Smart Contract Service Tools](#smart-contract-service-tools)
   - [Advanced Usage](#advanced-usage)
     - [Using `HederaAgentKit` Directly](#using-hederaagentkit-directly)
+    - [Tool Filtering](#tool-filtering)
     - [Plugin System](#plugin-system)
   - [API Reference](#api-reference)
     - [HederaConversationalAgent Options](#hederaconversationalagent-options)
@@ -624,6 +625,94 @@ async function useKitDirectly() {
 }
 ```
 
+### Tool Filtering
+
+You can control which tools are available to the conversational agent by providing a `toolFilter` function. This is useful when you want to:
+- Limit the agent's capabilities for security reasons
+- Create specialized agents focused on specific tasks
+- Implement role-based access control
+- Reduce the token count sent to the LLM by filtering out unnecessary tools
+
+```typescript
+import { HederaConversationalAgent } from '@hashgraphonline/hedera-agent-kit';
+import { StructuredTool } from '@langchain/core/tools';
+
+// Example 1: Allow only read operations (no state changes)
+const readOnlyAgent = new HederaConversationalAgent(agentSigner, {
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  toolFilter: (tool: StructuredTool) => {
+    const readOnlyTools = [
+      'get-', 
+      'query', 
+      'account-balance',
+      'account-info',
+      'topic-info',
+      'token-info'
+    ];
+    return readOnlyTools.some(pattern => tool.name.includes(pattern));
+  }
+});
+
+// Example 2: Disable specific high-risk operations
+const restrictedAgent = new HederaConversationalAgent(agentSigner, {
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  toolFilter: (tool: StructuredTool) => {
+    const blockedTools = [
+      'hedera-account-delete',
+      'hedera-hts-wipe-token-account',
+      'hedera-hts-burn-nft',
+      'hedera-delete-contract'
+    ];
+    return !blockedTools.includes(tool.name);
+  }
+});
+
+// Example 3: Create an NFT-focused agent
+const nftAgent = new HederaConversationalAgent(agentSigner, {
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  userAccountId: userAccountId,
+  toolFilter: (tool: StructuredTool) => {
+    const nftTools = [
+      'hedera-hts-create-nft',
+      'hedera-hts-mint-nft',
+      'hedera-hts-transfer-nft',
+      'hedera-hts-burn-nft',
+      'hedera-hts-associate-token',
+      'hedera-account-get-nfts',
+      'hedera-account-transfer-hbar', // For paying fees
+      'hedera-account-get-balance'
+    ];
+    return nftTools.includes(tool.name);
+  }
+});
+
+// Example 4: Dynamic filtering based on user roles
+async function createRoleBasedAgent(userRole: 'admin' | 'user' | 'viewer') {
+  const agent = new HederaConversationalAgent(agentSigner, {
+    openAIApiKey: process.env.OPENAI_API_KEY,
+    toolFilter: (tool: StructuredTool) => {
+      switch (userRole) {
+        case 'viewer':
+          // Only allow read operations
+          return tool.name.includes('get-') || tool.name.includes('query');
+        case 'user':
+          // Allow most operations except account management
+          return !tool.name.includes('account-delete') && 
+                 !tool.name.includes('account-create');
+        case 'admin':
+          // Allow all tools
+          return true;
+        default:
+          return false;
+      }
+    }
+  });
+  
+  await agent.initialize();
+  return agent;
+}
+```
+
 ### Plugin System
 
 Extend the agent's capabilities with custom plugins:
@@ -681,8 +770,12 @@ interface HederaConversationalAgentOptions {
   // Plugin Configuration
   pluginConfig?: PluginConfig; // Configure plugins
 
+  // Tool Filtering
+  toolFilter?: (tool: StructuredTool) => boolean; // Filter which tools are available to the agent
+
   // Debug Options
   verbose?: boolean; // Enable verbose logging
+  disableLogging?: boolean; // Disable all logging output
 }
 ```
 

@@ -32,6 +32,7 @@ export interface HederaConversationalAgentConfig {
   modelCapability?: ModelCapability;
   mirrorNodeConfig?: MirrorNodeConfig;
   disableLogging?: boolean;
+  toolFilter?: (tool: StructuredTool) => boolean;
 }
 
 /**
@@ -244,7 +245,20 @@ export class HederaConversationalAgent {
 
     await this.hederaKit.initialize();
     this.systemMessage = this.constructSystemMessage();
-    const toolsFromKit = this.hederaKit.getAggregatedLangChainTools();
+    let toolsFromKit = this.hederaKit.getAggregatedLangChainTools() as StructuredTool[];
+    
+    // Apply tool filter if provided
+    if (this.config.toolFilter) {
+      const originalCount = toolsFromKit.length;
+      toolsFromKit = toolsFromKit.filter(this.config.toolFilter);
+      const filteredCount = originalCount - toolsFromKit.length;
+      if (filteredCount > 0) {
+        this.logger.info(
+          `Filtered out ${filteredCount} tools based on provided filter`
+        );
+      }
+    }
+    
     if (toolsFromKit.length === 0) {
       this.logger.warn(
         'No tools were loaded into HederaAgentKit. The agent may not function correctly.'

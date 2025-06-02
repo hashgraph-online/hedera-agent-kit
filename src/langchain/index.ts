@@ -179,7 +179,7 @@ export async function createHederaTools(
 }
 
 export { BaseHederaTransactionTool } from './tools/common/base-hedera-transaction-tool';
-
+export { BaseHederaQueryTool } from './tools/common/base-hedera-query-tool';
 export { HederaCreateTopicTool } from './tools/hcs/create-topic-tool';
 export { HederaDeleteTopicTool } from './tools/hcs/delete-topic-tool';
 export { HederaSubmitMessageTool } from './tools/hcs/submit-message-tool';
