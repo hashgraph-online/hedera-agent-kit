@@ -14,6 +14,12 @@ import { StructuredTool } from '@langchain/core/tools';
 import { AgentOperationalMode, MirrorNodeConfig } from '../types';
 import { ModelCapability } from '../types/model-capability';
 import { ModelCapabilityDetector } from '../utils/model-capability-detector';
+import {
+  TokenUsageCallbackHandler,
+  TokenUsage,
+  CostCalculation,
+  calculateTokenCostSync,
+} from '../utils/token-usage-tracker';
 
 /**
  * Configuration for the HederaConversationalAgent.
@@ -49,6 +55,8 @@ export interface AgentResponse {
   error?: string | undefined;
   intermediateSteps?: unknown;
   rawToolOutput?: unknown;
+  tokenUsage?: TokenUsage | undefined;
+  cost?: CostCalculation | undefined;
   [key: string]: any;
 }
 
@@ -93,6 +101,7 @@ export class HederaConversationalAgent {
   private logger: Logger;
   private config: HederaConversationalAgentConfig;
   private systemMessage!: string;
+  private tokenUsageHandler: TokenUsageCallbackHandler;
 
   /**
    * Creates an instance of HederaConversationalAgent.
@@ -141,6 +150,16 @@ export class HederaConversationalAgent {
       shouldDisableLogs
     );
 
+    const modelName =
+      this.config.openAIModelName ||
+      process.env.OPENAI_MODEL_NAME ||
+      'gpt-4o-mini';
+
+    this.tokenUsageHandler = new TokenUsageCallbackHandler(
+      modelName,
+      this.logger
+    );
+
     if (this.config.llm) {
       this.llm = this.config.llm;
     } else {
@@ -152,11 +171,9 @@ export class HederaConversationalAgent {
       }
       this.llm = new ChatOpenAI({
         apiKey: apiKey,
-        modelName:
-          this.config.openAIModelName ||
-          process.env.OPENAI_MODEL_NAME ||
-          'gpt-4o-mini',
+        modelName: modelName,
         temperature: 0.1,
+        callbacks: [this.tokenUsageHandler],
       } as ChatOpenAIFields);
     }
   }
@@ -245,9 +262,9 @@ export class HederaConversationalAgent {
 
     await this.hederaKit.initialize();
     this.systemMessage = this.constructSystemMessage();
-    let toolsFromKit = this.hederaKit.getAggregatedLangChainTools() as StructuredTool[];
-    
-    // Apply tool filter if provided
+    let toolsFromKit =
+      this.hederaKit.getAggregatedLangChainTools() as StructuredTool[];
+
     if (this.config.toolFilter) {
       const originalCount = toolsFromKit.length;
       toolsFromKit = toolsFromKit.filter(this.config.toolFilter);
@@ -258,7 +275,7 @@ export class HederaConversationalAgent {
         );
       }
     }
-    
+
     if (toolsFromKit.length === 0) {
       this.logger.warn(
         'No tools were loaded into HederaAgentKit. The agent may not function correctly.'
@@ -323,6 +340,8 @@ export class HederaConversationalAgent {
       error: undefined,
       intermediateSteps: undefined,
       rawToolOutput: undefined,
+      tokenUsage: undefined,
+      cost: undefined,
     };
 
     try {
@@ -349,6 +368,19 @@ export class HederaConversationalAgent {
         response.output = 'Agent action complete.';
       }
 
+      const tokenUsage = this.tokenUsageHandler.getLatestTokenUsage();
+      if (tokenUsage) {
+        response.tokenUsage = tokenUsage;
+        response.cost = calculateTokenCostSync(tokenUsage);
+
+        this.logger.debug('Token usage for request:', {
+          promptTokens: tokenUsage.promptTokens,
+          completionTokens: tokenUsage.completionTokens,
+          totalTokens: tokenUsage.totalTokens,
+          cost: response.cost.totalCost,
+        });
+      }
+
       return response;
     } catch (error: unknown) {
       const errorMessage =
@@ -357,6 +389,13 @@ export class HederaConversationalAgent {
         `Error in HederaConversationalAgent.processMessage: ${errorMessage}`,
         error
       );
+
+      const tokenUsage = this.tokenUsageHandler.getLatestTokenUsage();
+      let cost: CostCalculation | undefined;
+      if (tokenUsage) {
+        cost = calculateTokenCostSync(tokenUsage);
+      }
+
       return {
         output: 'Sorry, I encountered an error processing your request.',
         message: response.message || '',
@@ -368,6 +407,8 @@ export class HederaConversationalAgent {
         transactionId: response.transactionId,
         intermediateSteps: response.intermediateSteps,
         rawToolOutput: response.rawToolOutput,
+        tokenUsage: tokenUsage || undefined,
+        cost,
       };
     }
   }
@@ -391,5 +432,34 @@ export class HederaConversationalAgent {
         'Operational mode changed. For the new system prompt to fully take effect, re-initialization (call initialize()) or recreation of the agent executor is needed.'
       );
     }
+  }
+
+  /**
+   * Get cumulative token usage across all requests
+   * @returns {TokenUsage & { cost: CostCalculation }} Total token usage and cost
+   */
+  public getTotalTokenUsage(): TokenUsage & { cost: CostCalculation } {
+    const totalUsage = this.tokenUsageHandler.getTotalTokenUsage();
+    const cost = calculateTokenCostSync(totalUsage);
+    return { ...totalUsage, cost };
+  }
+
+  /**
+   * Get token usage history for all requests
+   * @returns {Array<TokenUsage & { cost: CostCalculation }>} Array of token usage records with costs
+   */
+  public getTokenUsageHistory(): Array<TokenUsage & { cost: CostCalculation }> {
+    return this.tokenUsageHandler.getTokenUsageHistory().map((usage) => ({
+      ...usage,
+      cost: calculateTokenCostSync(usage),
+    }));
+  }
+
+  /**
+   * Reset token usage tracking
+   */
+  public resetTokenUsageTracking(): void {
+    this.tokenUsageHandler.reset();
+    this.logger.info('Token usage tracking has been reset');
   }
 }
