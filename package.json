@@ -83,6 +83,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/hashgraph-online/hedera-agent-kit.git"
+    "url": "git+https://github.com/hedera-dev/hedera-agent-kit.git"
   }
 }

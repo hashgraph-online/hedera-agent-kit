@@ -1,4 +1,4 @@
-# @hashgraph-online/hedera-agent-kit
+# hedera-agent-kit
 
 Build LLM-powered applications that interact with the Hedera Network. Create conversational agents that can understand user requests in natural language and execute Hedera transactions, or build backend systems that leverage AI for on-chain operations.
 
@@ -15,7 +15,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
 
 ## Table of Contents
 
-- [@hashgraph-online/hedera-agent-kit](#hashgraph-onlinehedera-agent-kit)
+- [hedera-agent-kit]
   - [Key Features](#key-features)
   - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
