@@ -1,4 +1,4 @@
-import BigNumber from 'bignumber.js';
+import BigNumber from "bignumber.js";
 import {
   PublicKey,
   AccountId,
@@ -21,7 +21,7 @@ import {
   PendingAirdropId,
   TransactionId,
   ScheduleId,
-} from '@hashgraph/sdk';
+} from "@hashgraph/sdk";
 
 export {
   PublicKey,
@@ -47,8 +47,8 @@ export {
   ScheduleId,
 };
 
-export type AgentOperationalMode = 'directExecution' | 'provideBytes';
-export type HederaNetworkType = 'mainnet' | 'testnet';
+export type AgentOperationalMode = "directExecution" | "provideBytes";
+export type HederaNetworkType = "mainnet" | "testnet";
 
 /**
  * Configuration for custom mirror node providers.
@@ -123,7 +123,7 @@ export type HtsTokenBalanceApiReponse = {
 };
 
 type ProtobufEncodedKey = {
-  _type: 'ProtobufEncoded';
+  _type: "ProtobufEncoded";
   key: string;
 };
 
@@ -154,14 +154,14 @@ export type HtsTokenDetails = {
   modified_timestamp: string;
   name: string;
   pause_key: ProtobufEncodedKey;
-  pause_status: 'PAUSED' | 'UNPAUSED';
+  pause_status: "PAUSED" | "UNPAUSED";
   supply_key: ProtobufEncodedKey;
-  supply_type: 'FINITE' | 'INFINITE';
+  supply_type: "FINITE" | "INFINITE";
   symbol: string;
   token_id: string;
   total_supply: string;
   treasury_account_id: string;
-  type: 'FUNGIBLE_COMMON' | 'NON_FUNGIBLE_UNIQUE';
+  type: "FUNGIBLE_COMMON" | "NON_FUNGIBLE_UNIQUE";
   wipe_key: ProtobufEncodedKey;
   supplyType: TokenSupplyType;
   maxSupply?: number | BigNumber;
@@ -234,34 +234,34 @@ export type HCSMessageApiResponse = {
 };
 
 export enum AgentKitActionName {
-  CREATE_TOPIC_CUSTODIAL = 'createTopicCustodial',
-  CREATE_TOPIC_NON_CUSTODIAL = 'createTopicNonCustodial',
-  DELETE_TOPIC_CUSTODIAL = 'deleteTopicCustodial',
-  DELETE_TOPIC_NON_CUSTODIAL = 'deleteTopicNonCustodial',
-  SUBMIT_TOPIC_MESSAGE_CUSTODIAL = 'submitTopicMessageCustodial',
-  SUBMIT_TOPIC_MESSAGE_NON_CUSTODIAL = 'submitTopicMessageCustodial',
-  CREATE_TOKEN_CUSTODIAL = 'createTokenCustodial',
-  CREATE_TOKEN_NON_CUSTODIAL = 'createTokenNonCustodial',
-  ASSOCIATE_TOKEN_CUSTODIAL = 'associateTokenCustodial',
-  ASSOCIATE_TOKEN_NON_CUSTODIAL = 'associateTokenNonCustodial',
-  DISSOCIATE_TOKEN_CUSTODIAL = 'dissociateTokenCustodial',
-  DISSOCIATE_TOKEN_NON_CUSTODIAL = 'dissociateTokenNonCustodial',
-  AIRDROP_TOKEN_CUSTODIAL = 'airdropTokenCustodial',
-  AIRDROP_TOKEN_NON_CUSTODIAL = 'airdropTokenNonCustodial',
-  REJECT_TOKEN_CUSTODIAL = 'rejectedTokenCustodial',
-  REJECT_TOKEN_NON_CUSTODIAL = 'rejectedTokenNonCustodial',
-  MINT_TOKEN_CUSTODIAL = 'mintTokenCustodial',
-  MINT_TOKEN_NON_CUSTODIAL = 'mintTokenNonCustodial',
-  MINT_NFT_TOKEN_CUSTODIAL = 'mintNFTTokenCustodial',
-  MINT_NFT_TOKEN_NON_CUSTODIAL = 'mintNFTTokenNonCustodial',
-  CLAIM_AIRDROP_CUSTODIAL = 'claimAirdropCustodial',
-  CLAIM_AIRDROP_NON_CUSTODIAL = 'claimAirdropNonCustodial',
-  TRANSFER_TOKEN_CUSTODIAL = 'transferTokenCustodial',
-  TRANSFER_TOKEN_NON_CUSTODIAL = 'transferTokenNonCustodial',
-  TRANSFER_HBAR_CUSTODIAL = 'transferHbarCustodial',
-  TRANSFER_HBAR_NON_CUSTODIAL = 'transferHbarNonCustodial',
-  ASSET_ALLOWANCE_CUSTODIAL = 'assetAllowedCustodial',
-  ASSET_ALLOWANCE_NON_CUSTODIAL = 'assetAllowedNonCustodial',
+  CREATE_TOPIC_CUSTODIAL = "createTopicCustodial",
+  CREATE_TOPIC_NON_CUSTODIAL = "createTopicNonCustodial",
+  DELETE_TOPIC_CUSTODIAL = "deleteTopicCustodial",
+  DELETE_TOPIC_NON_CUSTODIAL = "deleteTopicNonCustodial",
+  SUBMIT_TOPIC_MESSAGE_CUSTODIAL = "submitTopicMessageCustodial",
+  SUBMIT_TOPIC_MESSAGE_NON_CUSTODIAL = "submitTopicMessageCustodial",
+  CREATE_TOKEN_CUSTODIAL = "createTokenCustodial",
+  CREATE_TOKEN_NON_CUSTODIAL = "createTokenNonCustodial",
+  ASSOCIATE_TOKEN_CUSTODIAL = "associateTokenCustodial",
+  ASSOCIATE_TOKEN_NON_CUSTODIAL = "associateTokenNonCustodial",
+  DISSOCIATE_TOKEN_CUSTODIAL = "dissociateTokenCustodial",
+  DISSOCIATE_TOKEN_NON_CUSTODIAL = "dissociateTokenNonCustodial",
+  AIRDROP_TOKEN_CUSTODIAL = "airdropTokenCustodial",
+  AIRDROP_TOKEN_NON_CUSTODIAL = "airdropTokenNonCustodial",
+  REJECT_TOKEN_CUSTODIAL = "rejectedTokenCustodial",
+  REJECT_TOKEN_NON_CUSTODIAL = "rejectedTokenNonCustodial",
+  MINT_TOKEN_CUSTODIAL = "mintTokenCustodial",
+  MINT_TOKEN_NON_CUSTODIAL = "mintTokenNonCustodial",
+  MINT_NFT_TOKEN_CUSTODIAL = "mintNFTTokenCustodial",
+  MINT_NFT_TOKEN_NON_CUSTODIAL = "mintNFTTokenNonCustodial",
+  CLAIM_AIRDROP_CUSTODIAL = "claimAirdropCustodial",
+  CLAIM_AIRDROP_NON_CUSTODIAL = "claimAirdropNonCustodial",
+  TRANSFER_TOKEN_CUSTODIAL = "transferTokenCustodial",
+  TRANSFER_TOKEN_NON_CUSTODIAL = "transferTokenNonCustodial",
+  TRANSFER_HBAR_CUSTODIAL = "transferHbarCustodial",
+  TRANSFER_HBAR_NON_CUSTODIAL = "transferHbarNonCustodial",
+  ASSET_ALLOWANCE_CUSTODIAL = "assetAllowedCustodial",
+  ASSET_ALLOWANCE_NON_CUSTODIAL = "assetAllowedNonCustodial",
 }
 
 /**
@@ -565,7 +565,7 @@ export interface DissociateTokensParams {
  * Amount is in the smallest unit (positive for credit, negative for debit).
  */
 export interface FungibleTokenTransferSpec {
-  type: 'fungible';
+  type: "fungible";
   tokenId: string | TokenId;
   accountId: string | AccountId;
   amount: number | BigNumber;
@@ -575,7 +575,7 @@ export interface FungibleTokenTransferSpec {
  * Represents a single non-fungible token (NFT) transfer operation.
  */
 export interface NonFungibleTokenTransferSpec {
-  type: 'nft';
+  type: "nft";
   nftId: NftId;
   senderAccountId: string | AccountId;
   receiverAccountId: string | AccountId;
@@ -585,9 +585,7 @@ export interface NonFungibleTokenTransferSpec {
 /**
  * Union type for different kinds of token transfers.
  */
-export type TokenTransferSpec =
-  | FungibleTokenTransferSpec
-  | NonFungibleTokenTransferSpec;
+export type TokenTransferSpec = FungibleTokenTransferSpec | NonFungibleTokenTransferSpec;
 
 /**
  * Parameters for a generic token transfer operation, potentially involving multiple tokens and NFTs.
@@ -846,11 +844,11 @@ export interface CreateFileParams {
   adminKey?: string | Key | null;
   autoRenewPeriod?: number;
   memo?: string | null;
-  stakedAccountId?: string | AccountId | '0.0.0' | null;
+  stakedAccountId?: string | AccountId | "0.0.0" | null;
   stakedNodeId?: number | Long | null;
   declineStakingReward?: boolean;
   maxAutomaticTokenAssociations?: number;
-  proxyAccountId?: string | AccountId | '0.0.0' | null;
+  proxyAccountId?: string | AccountId | "0.0.0" | null;
 }
 
 /**
@@ -904,7 +902,7 @@ export interface UpdateContractParams {
   /** New memo for the contract. An empty string or `null` to clear. */
   memo?: string | null;
   /** New account to which this contract is staked. `null` to unstake. */
-  stakedAccountId?: string | AccountId | '0.0.0' | null; // "0.0.0" to remove staking
+  stakedAccountId?: string | AccountId | "0.0.0" | null; // "0.0.0" to remove staking
   /** New node ID to which this contract is staked. `-1` to remove staking. */
   stakedNodeId?: number | Long | null;
   /** If true, the contract declines receiving a staking reward. */
@@ -912,7 +910,7 @@ export interface UpdateContractParams {
   /** New max automatic token associations for the contract. */
   maxAutomaticTokenAssociations?: number;
   /** New proxy account ID for the contract. `null` or `"0.0.0"` to clear. */
-  proxyAccountId?: string | AccountId | '0.0.0' | null;
+  proxyAccountId?: string | AccountId | "0.0.0" | null;
   // Updating bytecode (bytecodeFileId) is not part of ContractUpdateTransaction.
 }
 
@@ -952,7 +950,7 @@ export interface UpdateAccountParams {
   /** New max automatic token associations for the account. */
   maxAutomaticTokenAssociations?: number;
   /** New account to which this account is staked. "0.0.0" or `null` to remove staking. */
-  stakedAccountId?: string | AccountId | '0.0.0' | null;
+  stakedAccountId?: string | AccountId | "0.0.0" | null;
   /** New node ID to which this account is staked. `-1` or `null` to remove staking. */
   stakedNodeId?: number | Long | null;
   /** If true, the account declines receiving a staking reward. */
@@ -1259,4 +1257,11 @@ export interface ContractQueryResult {
   // For a generic tool, might return raw bytes or a common representation.
   resultAsBytes?: Uint8Array; // Raw result
   resultDecoded?: any; // If ABI is available and decoding is attempted by the tool
+}
+
+export interface BonzoGetATokenBalanceParams {
+  /** The asset symbol to check aToken balance for (e.g., HBAR, USDC, SAUCE). */
+  assetSymbol: string;
+  /** The Hedera account ID to check the balance for (e.g., "0.0.789012"). */
+  accountId: string;
 }

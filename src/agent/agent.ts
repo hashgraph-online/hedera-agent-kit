@@ -1,44 +1,26 @@
-import {
-  AccountId,
-  Client,
-  PublicKey,
-  TransactionId,
-  TransactionReceipt,
-  ScheduleSignTransaction,
-  ScheduleId,
-} from '@hashgraph/sdk';
-import { AbstractSigner } from '../signer/abstract-signer';
-import {
-  SignScheduledTransactionParams,
-  AgentOperationalMode,
-  HederaNetworkType,
-  MirrorNodeConfig,
-} from '../types';
-import { HederaMirrorNode, Logger } from '@hashgraphonline/standards-sdk';
-import {
-  IPlugin,
-  GenericPluginContext,
-  OpenConvaiState,
-  HCS10Client,
-} from '@hashgraphonline/standards-agent-kit';
-import { Tool } from '@langchain/core/tools';
-import { HcsBuilder } from '../builders/hcs/hcs-builder';
-import { HtsBuilder } from '../builders/hts/hts-builder';
-import { AccountBuilder } from '../builders/account/account-builder';
-import { ScsBuilder } from '../builders/scs/scs-builder';
-import { FileBuilder } from '../builders/file/file-builder';
-import { QueryBuilder } from '../builders/query/query-builder';
-import { ExecuteResult } from '../builders/base-service-builder';
-import { createHederaTools } from '../langchain';
-import { ModelCapability } from '../types/model-capability';
-import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
+import { AccountId, Client, PublicKey, TransactionId, TransactionReceipt, ScheduleSignTransaction, ScheduleId } from "@hashgraph/sdk";
+import { AbstractSigner } from "../signer/abstract-signer";
+import { SignScheduledTransactionParams, AgentOperationalMode, HederaNetworkType, MirrorNodeConfig } from "../types";
+import { HederaMirrorNode, Logger } from "@hashgraphonline/standards-sdk";
+import { IPlugin, GenericPluginContext, OpenConvaiState, HCS10Client } from "@hashgraphonline/standards-agent-kit";
+import { Tool } from "@langchain/core/tools";
+import { HcsBuilder } from "../builders/hcs/hcs-builder";
+import { HtsBuilder } from "../builders/hts/hts-builder";
+import { BonzoBuilder } from "../builders/bonzo/bonzo-builder";
+import { AccountBuilder } from "../builders/account/account-builder";
+import { ScsBuilder } from "../builders/scs/scs-builder";
+import { FileBuilder } from "../builders/file/file-builder";
+import { QueryBuilder } from "../builders/query/query-builder";
+import { ExecuteResult } from "../builders/base-service-builder";
+import { createHederaTools } from "../langchain";
+import { ModelCapability } from "../types/model-capability";
+import { OpenConvAIPlugin } from "@hashgraphonline/standards-agent-kit";
 
 export interface PluginConfig {
   plugins?: IPlugin[];
   appConfig?: Record<string, unknown> | undefined;
 }
-const NOT_INITIALIZED_ERROR =
-  'HederaAgentKit not initialized. Call await kit.initialize() first.';
+const NOT_INITIALIZED_ERROR = "HederaAgentKit not initialized. Call await kit.initialize() first.";
 
 /**
  * HederaAgentKit provides a simplified interface for interacting with the Hedera network,
@@ -65,7 +47,7 @@ export class HederaAgentKit {
   constructor(
     signer: AbstractSigner,
     pluginConfigInput?: PluginConfig | undefined,
-    initialOperationalMode: AgentOperationalMode = 'provideBytes',
+    initialOperationalMode: AgentOperationalMode = "provideBytes",
     userAccountId?: string,
     scheduleUserTransactionsInBytesMode: boolean = true,
     modelCapability: ModelCapability = ModelCapability.MEDIUM,
@@ -76,32 +58,28 @@ export class HederaAgentKit {
     this.signer = signer;
     this.network = this.signer.getNetwork();
 
-    const shouldDisableLogs =
-      disableLogging || process.env.DISABLE_LOGS === 'true';
+    const shouldDisableLogs = disableLogging || process.env.DISABLE_LOGS === "true";
 
     this.logger = new Logger({
-      level: shouldDisableLogs ? 'silent' : 'info',
-      module: 'HederaAgentKit',
+      level: shouldDisableLogs ? "silent" : "info",
+      module: "HederaAgentKit",
       silent: shouldDisableLogs,
     });
 
-    if (this.network === 'mainnet') {
+    if (this.network === "mainnet") {
       this.client = Client.forMainnet();
-    } else if (this.network === 'testnet') {
+    } else if (this.network === "testnet") {
       this.client = Client.forTestnet();
     } else {
       throw new Error(`Unsupported network type: ${this.network}`);
     }
-    this.client.setOperator(
-      this.signer.getAccountId(),
-      this.signer.getOperatorPrivateKey()
-    );
+    this.client.setOperator(this.signer.getAccountId(), this.signer.getOperatorPrivateKey());
 
     this.mirrorNode = new HederaMirrorNode(
       this.network,
       new Logger({
-        level: shouldDisableLogs ? ('silent' as any) : 'info',
-        module: 'HederaAgentKit-MirrorNode',
+        level: shouldDisableLogs ? ("silent" as any) : "info",
+        module: "HederaAgentKit-MirrorNode",
         silent: shouldDisableLogs,
       }),
       mirrorNodeConfig
@@ -112,8 +90,7 @@ export class HederaAgentKit {
     this.aggregatedTools = [];
     this.operationalMode = initialOperationalMode;
     this.userAccountId = userAccountId;
-    this.scheduleUserTransactionsInBytesMode =
-      scheduleUserTransactionsInBytesMode;
+    this.scheduleUserTransactionsInBytesMode = scheduleUserTransactionsInBytesMode;
     this.modelCapability = modelCapability;
     this.modelName = modelName;
   }
@@ -124,7 +101,7 @@ export class HederaAgentKit {
    */
   public async initialize(): Promise<void> {
     if (this.isInitialized) {
-      this.logger.warn('HederaAgentKit is already initialized.');
+      this.logger.warn("HederaAgentKit is already initialized.");
       return;
     }
 
@@ -141,32 +118,19 @@ export class HederaAgentKit {
     if (this.pluginConfigInternal?.plugins) {
       for (const pluginInstance of this.pluginConfigInternal.plugins) {
         try {
-          this.logger.info(
-            `Initializing directly provided plugin: ${pluginInstance.name}`
-          );
+          this.logger.info(`Initializing directly provided plugin: ${pluginInstance.name}`);
           await pluginInstance.initialize(contextForPlugins);
           this.loadedPlugins.push(pluginInstance);
-          this.logger.info(
-            `Successfully initialized and added directly provided plugin: ${pluginInstance.name}`
-          );
+          this.logger.info(`Successfully initialized and added directly provided plugin: ${pluginInstance.name}`);
         } catch (error: unknown) {
-          this.logger.error(
-            `Failed to initialize directly provided plugin ${
-              pluginInstance.name
-            }: ${error instanceof Error ? error.message : String(error)}`
-          );
+          this.logger.error(`Failed to initialize directly provided plugin ${pluginInstance.name}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
     }
 
     const signerAccountId = this.signer?.getAccountId()?.toString();
     const signerPrivateKey = this.signer?.getOperatorPrivateKey();
-    const coreKitTools = await createHederaTools(
-      this,
-      signerAccountId,
-      signerPrivateKey,
-      this.modelCapability
-    );
+    const coreKitTools = await createHederaTools(this, signerAccountId, signerPrivateKey, this.modelCapability);
     const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
       return plugin.getTools();
     }) as unknown as Tool[];
@@ -174,26 +138,16 @@ export class HederaAgentKit {
     await openConvAIPlugin.initialize({
       logger: this.logger,
       config: this.pluginConfigInternal?.appConfig || {},
-      client: new HCS10Client(
-        this.signer.getAccountId().toString(),
-        this.signer.getOperatorPrivateKey()?.toStringRaw(),
-        this.network,
-      ),
+      client: new HCS10Client(this.signer.getAccountId().toString(), this.signer.getOperatorPrivateKey()?.toStringRaw(), this.network),
       stateManager: new OpenConvaiState(),
     });
 
     const hcs10Tools = openConvAIPlugin.getTools();
 
-    this.aggregatedTools = [
-      ...coreKitTools,
-      ...pluginTools,
-      ...hcs10Tools,
-    ] as unknown as Tool[];
+    this.aggregatedTools = [...coreKitTools, ...pluginTools, ...hcs10Tools] as unknown as Tool[];
 
     this.isInitialized = true;
-    this.logger.info(
-      'HederaAgentKit initialized successfully with all tools aggregated.'
-    );
+    this.logger.info("HederaAgentKit initialized successfully with all tools aggregated.");
   }
 
   public async getOperator(): Promise<{ id: AccountId; publicKey: PublicKey }> {
@@ -211,9 +165,7 @@ export class HederaAgentKit {
    */
   public getAggregatedLangChainTools(): Tool[] {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() before accessing tools.'
-      );
+      throw new Error("HederaAgentKit not initialized. Call await kit.initialize() before accessing tools.");
     }
     return this.aggregatedTools;
   }
@@ -240,6 +192,18 @@ export class HederaAgentKit {
       throw new Error(NOT_INITIALIZED_ERROR);
     }
     return new HtsBuilder(this);
+  }
+
+  /**
+   * Provides access to the Bonzo finance platform builder for querying aToken balances and other DeFi operations.
+   * @returns {BonzoBuilder} An instance of BonzoBuilder.
+   * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
+   */
+  public bonzo(): BonzoBuilder {
+    if (!this.isInitialized) {
+      throw new Error(NOT_INITIALIZED_ERROR);
+    }
+    return new BonzoBuilder(this);
   }
 
   /**
@@ -296,21 +260,12 @@ export class HederaAgentKit {
    * @returns {Promise<TransactionReceipt>} A promise that resolves to the TransactionReceipt.
    * @throws {Error} If the transaction ID is invalid or receipt cannot be fetched.
    */
-  public async getTransactionReceipt(
-    transactionIdInput: TransactionId | string
-  ): Promise<TransactionReceipt> {
-    const transactionId =
-      typeof transactionIdInput === 'string'
-        ? TransactionId.fromString(transactionIdInput)
-        : transactionIdInput;
+  public async getTransactionReceipt(transactionIdInput: TransactionId | string): Promise<TransactionReceipt> {
+    const transactionId = typeof transactionIdInput === "string" ? TransactionId.fromString(transactionIdInput) : transactionIdInput;
     try {
       return await transactionId.getReceipt(this.client);
     } catch (error: unknown) {
-      this.logger.error(
-        `Failed to get transaction receipt for ${transactionId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      this.logger.error(`Failed to get transaction receipt for ${transactionId.toString()}: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -322,22 +277,13 @@ export class HederaAgentKit {
    * @returns {Promise<ExecuteResult>} A promise that resolves to an object indicating success, receipt, and transactionId.
    * @throws {Error} If the execution fails.
    */
-  public async signScheduledTransaction(
-    params: SignScheduledTransactionParams
-  ): Promise<ExecuteResult> {
+  public async signScheduledTransaction(params: SignScheduledTransactionParams): Promise<ExecuteResult> {
     if (!this.isInitialized) {
-      throw new Error(
-        'HederaAgentKit not initialized. Call await kit.initialize() first.'
-      );
+      throw new Error("HederaAgentKit not initialized. Call await kit.initialize() first.");
     }
-    this.logger.info(
-      `Attempting to sign scheduled transaction: ${params.scheduleId.toString()}`
-    );
+    this.logger.info(`Attempting to sign scheduled transaction: ${params.scheduleId.toString()}`);
 
-    const scheduleId =
-      typeof params.scheduleId === 'string'
-        ? ScheduleId.fromString(params.scheduleId)
-        : params.scheduleId;
+    const scheduleId = typeof params.scheduleId === "string" ? ScheduleId.fromString(params.scheduleId) : params.scheduleId;
 
     const transaction = new ScheduleSignTransaction().setScheduleId(scheduleId);
 
@@ -360,11 +306,7 @@ export class HederaAgentKit {
         transactionId: transactionIdToReport,
       };
     } catch (error: unknown) {
-      this.logger.error(
-        `Failed to sign scheduled transaction ${params.scheduleId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
+      this.logger.error(`Failed to sign scheduled transaction ${params.scheduleId.toString()}: ${error instanceof Error ? error.message : String(error)}`);
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
