@@ -94,9 +94,6 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
     this.responseStrategy = { ...baseStrategy, ...customStrategy };
 
     this.logger.debug(`Initialized query tool with ${modelCapability} capability strategy`);
-
-    // Update description to include the input schema
-    this.description = this.description + " Input should be a JSON object adhering to the schema: " + JSON.stringify(this.specificInputSchema.shape);
   }
 
   /**
@@ -297,21 +294,31 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
       const rawInput = typeof input === "string" ? JSON.parse(input) : input;
       parsedInput = this.specificInputSchema.parse(rawInput);
     } catch (e: any) {
-      return `Error: Invalid input format. Expected JSON matching the schema. Zod Error: ${e.message}`;
+      return JSON.stringify({
+        success: false,
+        error: `Invalid input format. Expected JSON matching the schema. Zod Error: ${e.message}`,
+      });
     }
 
     try {
       const builder = this.getServiceBuilder();
       const result = await this.callBuilderMethod(builder, parsedInput);
 
-      // Format the result as a readable string
-      if (typeof result === "object") {
-        return JSON.stringify(result, null, 2);
-      }
-      return String(result);
+      // Always wrap successful results in a consistent format
+      return JSON.stringify(
+        {
+          success: true,
+          data: result,
+        },
+        null,
+        2
+      );
     } catch (error: any) {
       const errorMessage = error.message || "Unknown error occurred";
-      return `Error executing ${this.name}: ${errorMessage}`;
+      return JSON.stringify({
+        success: false,
+        error: errorMessage,
+      });
     }
   }
 

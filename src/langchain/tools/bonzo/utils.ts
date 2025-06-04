@@ -67,7 +67,7 @@ export function getTokenInfo(network: NetworkType, assetSymbol: string): BonzoTo
  * @returns The EVM address (hex string with 0x prefix) or null if not found/error.
  */
 export async function getAccountEvmAddressFromMirrorNode(accountId: string, network: NetworkType): Promise<string | null> {
-  const mirrorNodeBaseUrl = network === "mainnet" ? "https://mainnet-public.mirrornode.hedera.com" : `https://${network}.mirrornode.hedera.com`; // testnet, previewnet use network name directly
+  const mirrorNodeBaseUrl = network === "mainnet" ? "https://mainnet.mirrornode.hedera.com" : "https://testnet.mirrornode.hedera.com";
 
   const url = `${mirrorNodeBaseUrl}/api/v1/accounts/${accountId}`;
 
@@ -75,16 +75,19 @@ export async function getAccountEvmAddressFromMirrorNode(accountId: string, netw
     const response = await fetch(url);
     if (!response.ok) {
       console.error(`Mirror node request failed for ${accountId} on ${network}: ${response.status} ${response.statusText}`);
-      const errorBody = await response.text(); // consume error body to prevent unhandled promise rejection
+      const errorBody = await response.text();
       console.error(`Error body: ${errorBody}`);
       return null;
     }
-    const data: MirrorNodeAccountsResponse = await response.json();
-    if (data.accounts && data.accounts.length > 0 && data.accounts[0].evm_address) {
-      const evmAddress = data.accounts[0].evm_address;
+    const data = await response.json();
+
+    // The response returns account data directly, not in an accounts array
+    if (data.evm_address) {
+      const evmAddress = data.evm_address;
       // Ensure 0x prefix
       return evmAddress.startsWith("0x") ? evmAddress : `0x${evmAddress}`;
     }
+
     console.warn(`EVM address not found for ${accountId} in mirror node response on ${network}.`);
     return null;
   } catch (error) {

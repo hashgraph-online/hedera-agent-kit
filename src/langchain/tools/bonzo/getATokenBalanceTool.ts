@@ -24,34 +24,27 @@ export class GetBonzoATokenBalanceTool extends BaseHederaQueryTool<typeof BonzoG
   }
 
   protected async callBuilderMethod(builder: BaseServiceBuilder, specificArgs: z.infer<typeof BonzoGetATokenBalanceZodSchemaCore>): Promise<any> {
-    return await (builder as BonzoBuilder).getATokenBalance({
+    const result = await (builder as BonzoBuilder).getATokenBalance({
       assetSymbol: specificArgs.assetSymbol,
       accountId: specificArgs.accountId,
     });
+
+    // Return enhanced structure with additional metadata that tests expect
+    return {
+      assetSymbol: specificArgs.assetSymbol,
+      accountId: specificArgs.accountId,
+      balance: result.balance,
+      formattedBalance: result.formattedBalance,
+      symbol: result.symbol,
+      decimals: result.decimals,
+      message: `Balance for a${specificArgs.assetSymbol} (User: ${specificArgs.accountId}): ${result.formattedBalance} ${result.symbol}`,
+    };
   }
 
   protected async executeQuery(args: z.infer<typeof BonzoGetATokenBalanceZodSchemaCore>, runManager?: CallbackManagerForToolRun): Promise<unknown> {
-    // Create the Bonzo builder
-    const bonzoBuilder = new BonzoBuilder(this.hederaKit);
-
-    // Execute the query using the builder
-    const result = await bonzoBuilder.getATokenBalance({
-      assetSymbol: args.assetSymbol,
-      accountId: args.accountId,
-    });
-
-    // Return structured data that the base class can format
-    return {
-      success: true,
-      data: {
-        assetSymbol: args.assetSymbol,
-        accountId: args.accountId,
-        balance: result.balance,
-        formattedBalance: result.formattedBalance,
-        symbol: result.symbol,
-        decimals: result.decimals,
-      },
-      message: `Balance for a${args.assetSymbol} (User: ${args.accountId}): ${result.formattedBalance} ${result.symbol}`,
-    };
+    // This method is required by the base class but not used in our current architecture
+    // The main logic is in callBuilderMethod which is called by the base class _call method
+    const builder = this.getServiceBuilder();
+    return this.callBuilderMethod(builder, args);
   }
 }
