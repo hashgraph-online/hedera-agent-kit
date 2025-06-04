@@ -1,7 +1,7 @@
 import { Contract, JsonRpcProvider, formatUnits as ethersFormatUnits } from "ethers";
 import { BaseServiceBuilder } from "../base-service-builder";
 import { HederaAgentKit } from "../../agent/agent";
-import { BonzoGetATokenBalanceParams } from "../../types";
+import { GetBonzoATokenBalanceParams } from "../../types";
 
 /**
  * BonzoBuilder facilitates querying Bonzo finance protocol on Hedera.
@@ -13,16 +13,19 @@ export class BonzoBuilder extends BaseServiceBuilder {
 
   /**
    * Get aToken balance for a given account and asset symbol from Bonzo platform
-   * @param {BonzoGetATokenBalanceParams} params
+   * @param {GetBonzoATokenBalanceParams} params
    * @returns {Promise<{ balance: string; symbol: string; decimals: number; formattedBalance: string }>}
    */
-  public async getATokenBalance(params: BonzoGetATokenBalanceParams): Promise<{
+  public async getATokenBalance(params: GetBonzoATokenBalanceParams): Promise<{
     balance: string;
     symbol: string;
     decimals: number;
     formattedBalance: string;
   }> {
     const { assetSymbol, accountId } = params;
+
+    // Convert AccountId to string if needed
+    const accountIdString = typeof accountId === "string" ? accountId : accountId.toString();
 
     // Import the utility functions
     const { getTokenInfo, getAccountEvmAddressFromMirrorNode } = await import("../../langchain/tools/bonzo/utils");
@@ -35,9 +38,9 @@ export class BonzoBuilder extends BaseServiceBuilder {
       throw new Error(`aToken not found for asset ${assetSymbol} on network ${network}. Check configuration.`);
     }
 
-    const userEvmAddress = await getAccountEvmAddressFromMirrorNode(accountId, network);
+    const userEvmAddress = await getAccountEvmAddressFromMirrorNode(accountIdString, network);
     if (!userEvmAddress) {
-      throw new Error(`Could not retrieve EVM address for account ${accountId} from mirror node on ${network}.`);
+      throw new Error(`Could not retrieve EVM address for account ${accountIdString} from mirror node on ${network}.`);
     }
 
     const erc20Abi = ["function balanceOf(address account) view returns (uint256)", "function decimals() view returns (uint8)"];
@@ -67,7 +70,7 @@ export class BonzoBuilder extends BaseServiceBuilder {
         formattedBalance,
       };
     } catch (error: any) {
-      let errMsg = `Error querying aToken ${assetSymbol} (${tokenInfo.aToken.address}) for account ${accountId} (${userEvmAddress}) on ${network}`;
+      let errMsg = `Error querying aToken ${assetSymbol} (${tokenInfo.aToken.address}) for account ${accountIdString} (${userEvmAddress}) on ${network}`;
       if (error.message) errMsg += `: ${error.message}`;
       if (error.data?.message) errMsg += ` - RPC Error: ${error.data.message}`;
       this.logger.error("BonzoBuilder.getATokenBalance Error:", error);

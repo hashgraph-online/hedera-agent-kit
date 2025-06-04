@@ -1,6 +1,6 @@
 import { StructuredTool, ToolParams } from "@langchain/core/tools";
 import { CallbackManagerForToolRun } from "@langchain/core/callbacks/manager";
-import { z, ZodType } from "zod";
+import { z } from "zod";
 import { HederaAgentKit } from "../../../agent/agent";
 import { Logger as StandardsSdkLogger } from "@hashgraphonline/standards-sdk";
 import { ModelCapabilityDetector } from "../../../utils/model-capability-detector";
@@ -67,20 +67,27 @@ export interface BaseHederaQueryToolParams extends ToolParams {
 }
 
 /**
- * Abstract base class for Hedera query tools that follow the builder pattern.
- * Unlike transaction tools, query tools return results rather than execute transactions.
+ * Base class for all Hedera query tools.
+ * Handles common query processing logic across different tool types.
+ * Unlike transaction tools, query tools are read-only and don't require signing.
+ *
+ * @template S - The Zod schema that defines the input parameters for the specific tool
  */
-export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> extends StructuredTool<TSpecificInputSchema> {
+export abstract class BaseHederaQueryTool<
+  //@ts-ignore
+  S extends z.ZodObject<unknown, unknown, unknown, unknown>
+  //@ts-ignore
+> extends StructuredTool<S> {
   protected hederaKit: HederaAgentKit;
   protected logger: StandardsSdkLogger;
   protected responseStrategy: ResponseStrategy;
   protected modelCapability: ModelCapability;
   private notes: string[] = [];
 
-  protected abstract specificInputSchema: TSpecificInputSchema;
-  protected abstract namespace: string;
+  abstract specificInputSchema: S;
+  abstract namespace: string;
 
-  get schema(): TSpecificInputSchema {
+  get schema(): S {
     return this.specificInputSchema;
   }
 
@@ -97,32 +104,34 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
   }
 
   /**
-   * Get the service builder (e.g., hts(), bonzo(), etc.)
-   */
-  protected abstract getServiceBuilder(): BaseServiceBuilder;
-
-  /**
-   * Call the specific query method on the builder
-   */
-  protected abstract callBuilderMethod(builder: BaseServiceBuilder, specificArgs: z.infer<TSpecificInputSchema>): Promise<any>;
-
-  /**
    * Execute the specific query operation.
    * This method should be implemented by concrete query tools.
    */
-  protected abstract executeQuery(args: z.infer<TSpecificInputSchema>, runManager?: CallbackManagerForToolRun): Promise<unknown>;
+  protected abstract executeQuery(args: z.infer<S>, runManager?: CallbackManagerForToolRun): Promise<unknown>;
+
+  /**
+   * Optional: Get the service builder for this tool.
+   * Tools that use the builder pattern should override this method.
+   */
+  protected getServiceBuilder?(): BaseServiceBuilder;
+
+  /**
+   * Optional: Call a specific method on the service builder.
+   * Tools that use the builder pattern should override this method.
+   */
+  protected callBuilderMethod?(builder: BaseServiceBuilder, args: z.infer<S>): Promise<unknown>;
 
   /**
    * Tools can define which fields should be processed for size optimization.
    * Return a map of field paths to processing configurations.
    * Field paths support dot notation (e.g., 'contract.bytecode') and wildcards (e.g., '*.bytecode')
    */
-  protected getLargeFieldProcessors?(args: z.infer<TSpecificInputSchema>): Record<string, FieldProcessor>;
+  protected getLargeFieldProcessors?(args: z.infer<S>): Record<string, FieldProcessor>;
 
   /**
    * Allow tools to define custom response processing logic
    */
-  protected processCustomResponse?(result: unknown, args: z.infer<TSpecificInputSchema>): unknown;
+  protected processCustomResponse?(result: unknown, args: z.infer<S>): unknown;
 
   /**
    * Estimate token count (rough approximation: 1 token ≈ 4 characters)
@@ -146,7 +155,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
   /**
    * Process any data structure based on field processors and strategy
    */
-  private processData(data: unknown, args: z.infer<TSpecificInputSchema>, path: string = ""): unknown {
+  private processData(data: unknown, args: z.infer<S>, path: string = ""): unknown {
     if (this.responseStrategy.maxTokens === Infinity) {
       return data;
     }
@@ -175,7 +184,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
   /**
    * Process array data
    */
-  private processArray(arr: unknown[], args: z.infer<TSpecificInputSchema>, path: string): unknown[] {
+  private processArray(arr: unknown[], args: z.infer<S>, path: string): unknown[] {
     const processedArray = arr.map((item, index) => this.processData(item, args, `${path}[${index}]`));
 
     if (this.responseStrategy.summarizeArrays && this.responseStrategy.maxArrayLength && arr.length > this.responseStrategy.maxArrayLength) {
@@ -200,7 +209,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
   /**
    * Process object data
    */
-  private processObject(obj: Record<string, unknown>, args: z.infer<TSpecificInputSchema>, path: string, processors: Record<string, FieldProcessor>): Record<string, unknown> {
+  private processObject(obj: Record<string, unknown>, args: z.infer<S>, path: string, processors: Record<string, FieldProcessor>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(obj)) {
@@ -239,7 +248,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
    * Format the query result for return to the LLM.
    * Override this method to customize result formatting.
    */
-  protected formatResult(result: unknown, args?: z.infer<TSpecificInputSchema>): string {
+  protected formatResult(result: unknown, args?: z.infer<S>): string {
     if (typeof result === "string") {
       return result;
     }
@@ -250,7 +259,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
       processedResult = this.processCustomResponse(processedResult, args);
     }
 
-    processedResult = this.processData(processedResult, args || ({} as z.infer<TSpecificInputSchema>));
+    processedResult = this.processData(processedResult, args || ({} as z.infer<S>));
 
     const jsonString = JSON.stringify(processedResult, null, 2);
     const estimatedTokens = this.estimateTokens(jsonString);
@@ -287,37 +296,54 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
    * Main method called when the tool is executed.
    * Processes arguments, executes the query, and formats the result.
    */
-  async _call(input: string | z.infer<TSpecificInputSchema>): Promise<string> {
-    let parsedInput: z.infer<TSpecificInputSchema>;
+  protected async _call(args: z.infer<S>, runManager?: CallbackManagerForToolRun): Promise<string> {
+    this.clearNotes();
 
     try {
-      const rawInput = typeof input === "string" ? JSON.parse(input) : input;
-      parsedInput = this.specificInputSchema.parse(rawInput);
-    } catch (e: any) {
-      return JSON.stringify({
-        success: false,
-        error: `Invalid input format. Expected JSON matching the schema. Zod Error: ${e.message}`,
-      });
-    }
+      this.logger.info(`Executing ${this.name} with model capability: ${this.modelCapability}`);
 
-    try {
-      const builder = this.getServiceBuilder();
-      const result = await this.callBuilderMethod(builder, parsedInput);
+      let rawData: unknown;
 
-      // Always wrap successful results in a consistent format
-      return JSON.stringify(
-        {
-          success: true,
-          data: result,
-        },
-        null,
-        2
-      );
-    } catch (error: any) {
-      const errorMessage = error.message || "Unknown error occurred";
+      // Check if tool uses builder pattern
+      if (this.getServiceBuilder && this.callBuilderMethod) {
+        const builder = this.getServiceBuilder();
+        rawData = await this.callBuilderMethod(builder, args);
+      } else {
+        // Fall back to direct executeQuery method
+        rawData = await this.executeQuery(args, runManager);
+      }
+
+      const processed = await this.processLargeFields(rawData, args);
+
+      const allNotes = this.getNotes();
+
+      if (typeof processed.data === "object" && processed.data !== null && "success" in processed.data) {
+        const toolResponse = processed.data as any;
+        const response = {
+          ...toolResponse,
+          ...(allNotes.length > 0 && {
+            notes: [...(toolResponse.notes || []), ...allNotes],
+          }),
+        };
+        return JSON.stringify(response);
+      }
+
+      const response = {
+        success: true,
+        data: processed.data,
+        ...(allNotes.length > 0 && { notes: allNotes }),
+      };
+
+      return JSON.stringify(response);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Error in ${this.name}: ${errorMessage}`, error);
+
+      const allNotes = this.getNotes();
       return JSON.stringify({
         success: false,
         error: errorMessage,
+        ...(allNotes.length > 0 && { notes: allNotes }),
       });
     }
   }
@@ -408,7 +434,7 @@ export abstract class BaseHederaQueryTool<TSpecificInputSchema extends ZodType> 
     return [...this.notes];
   }
 
-  private async processLargeFields(data: unknown, args?: z.infer<TSpecificInputSchema>): Promise<{ data: unknown; notes: string[] }> {
+  private async processLargeFields(data: unknown, args?: z.infer<S>): Promise<{ data: unknown; notes: string[] }> {
     const result: { data: unknown; notes: string[] } = {
       data: JSON.parse(JSON.stringify(data)),
       notes: [],

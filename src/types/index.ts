@@ -1253,15 +1253,40 @@ export interface ContractQueryResult {
   contractId?: string;
   errorMessage?: string;
   gasUsed?: string; // u64
-  // Various ways to get results based on type, e.getString, getInt32, etc.
+  // Various ways to get results based on type, getstring, getInt32, etc.
   // For a generic tool, might return raw bytes or a common representation.
   resultAsBytes?: Uint8Array; // Raw result
   resultDecoded?: any; // If ABI is available and decoding is attempted by the tool
 }
 
-export interface BonzoGetATokenBalanceParams {
-  /** The asset symbol to check aToken balance for (e.g., HBAR, USDC, SAUCE). */
+// --- BONZO PROTOCOL TYPES ---
+
+/**
+ * Parameters for getting aToken balance from Bonzo protocol
+ */
+export interface GetBonzoATokenBalanceParams {
+  /** The asset symbol to check aToken balance for (e.g., HBAR, USDC, SAUCE) */
   assetSymbol: string;
-  /** The Hedera account ID to check the balance for (e.g., "0.0.789012"). */
+  /** The Hedera account ID to check the balance for (e.g., "0.0.789012") */
+  accountId: string | AccountId;
+}
+
+/**
+ * Result of querying aToken balance from Bonzo protocol
+ */
+export interface BonzoATokenBalanceResult {
+  /** The original asset symbol requested */
+  assetSymbol: string;
+  /** The account ID that was queried */
   accountId: string;
+  /** The raw balance amount as a string */
+  balance: string;
+  /** The formatted balance for display */
+  formattedBalance: string;
+  /** The aToken symbol (e.g., aWHBAR) */
+  symbol: string;
+  /** The number of decimal places for the token */
+  decimals: number;
+  /** A descriptive message about the balance */
+  message?: string;
 }

@@ -6,7 +6,6 @@ import { IPlugin, GenericPluginContext, OpenConvaiState, HCS10Client } from "@ha
 import { Tool } from "@langchain/core/tools";
 import { HcsBuilder } from "../builders/hcs/hcs-builder";
 import { HtsBuilder } from "../builders/hts/hts-builder";
-import { BonzoBuilder } from "../builders/bonzo/bonzo-builder";
 import { AccountBuilder } from "../builders/account/account-builder";
 import { ScsBuilder } from "../builders/scs/scs-builder";
 import { FileBuilder } from "../builders/file/file-builder";
@@ -15,6 +14,7 @@ import { ExecuteResult } from "../builders/base-service-builder";
 import { createHederaTools } from "../langchain";
 import { ModelCapability } from "../types/model-capability";
 import { OpenConvAIPlugin } from "@hashgraphonline/standards-agent-kit";
+import { BonzoBuilder } from "../builders/bonzo/bonzo-builder";
 
 export interface PluginConfig {
   plugins?: IPlugin[];
@@ -195,18 +195,6 @@ export class HederaAgentKit {
   }
 
   /**
-   * Provides access to the Bonzo finance platform builder for querying aToken balances and other DeFi operations.
-   * @returns {BonzoBuilder} An instance of BonzoBuilder.
-   * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
-   */
-  public bonzo(): BonzoBuilder {
-    if (!this.isInitialized) {
-      throw new Error(NOT_INITIALIZED_ERROR);
-    }
-    return new BonzoBuilder(this);
-  }
-
-  /**
    * Provides access to the Hedera Account Service builder.
    * @returns {AccountBuilder} An instance of AccountBuilder.
    * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
@@ -252,6 +240,18 @@ export class HederaAgentKit {
       throw new Error(NOT_INITIALIZED_ERROR);
     }
     return new QueryBuilder(this);
+  }
+
+  /**
+   * Provides access to the Bonzo DeFi protocol builder for querying.
+   * @returns {BonzoBuilder} An instance of BonzoBuilder.
+   * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
+   */
+  public bonzo(): BonzoBuilder {
+    if (!this.isInitialized) {
+      throw new Error(NOT_INITIALIZED_ERROR);
+    }
+    return new BonzoBuilder(this);
   }
 
   /**
