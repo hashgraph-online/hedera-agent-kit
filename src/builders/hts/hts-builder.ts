@@ -103,7 +103,7 @@ function mapToSdkCustomFees(
     if (
       !feeCollectorStringToParse &&
       kitUserAccountId &&
-      kitOperationalMode === 'provideBytes'
+      (kitOperationalMode === 'provideBytes' || kitOperationalMode === 'human-in-the-loop')
     ) {
       feeCollectorStringToParse = kitUserAccountId;
       if (addNoteFn) {
@@ -212,7 +212,7 @@ function mapToSdkCustomFees(
           if (
             !fallbackFeeCollectorStringToParse &&
             kitUserAccountId &&
-            kitOperationalMode === 'provideBytes'
+            (kitOperationalMode === 'provideBytes' || kitOperationalMode === 'human-in-the-loop')
           ) {
             fallbackFeeCollectorStringToParse = kitUserAccountId;
             if (addNoteFn) {
@@ -267,8 +267,7 @@ function mapToSdkCustomFees(
       default: {
         const exhaustiveCheck: never = feeData;
         logger.warn(
-          `Unsupported custom fee type encountered: ${
-            (exhaustiveCheck as any).type
+          `Unsupported custom fee type encountered: ${(exhaustiveCheck as any).type
           }`
         );
         throw new Error(
@@ -298,7 +297,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (
       !treasuryAccId &&
       this.kit.userAccountId &&
-      this.kit.operationalMode === 'provideBytes'
+      (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop')
     ) {
       this.logger.info(
         `[HtsBuilder.createFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for FT creation in provideBytes mode.`
@@ -410,8 +409,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
       this.addNote(
-        `A standard auto-renew period of ${
-          DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
+        `A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
         } days has been set for this token.`
       );
     }
@@ -432,7 +430,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (
       !treasuryAccId &&
       this.kit.userAccountId &&
-      this.kit.operationalMode === 'provideBytes'
+      (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop')
     ) {
       this.logger.info(
         `[HtsBuilder.createNonFungibleToken] Using userAccountId ${this.kit.userAccountId} as treasury for NFT creation in provideBytes mode.`
@@ -567,8 +565,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     } else if (params.autoRenewAccountId) {
       transaction.setAutoRenewPeriod(DEFAULT_AUTORENEW_PERIOD_SECONDS);
       this.addNote(
-        `A standard auto-renew period of ${
-          DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
+        `A standard auto-renew period of ${DEFAULT_AUTORENEW_PERIOD_SECONDS / (24 * 60 * 60)
         } days has been set for this NFT collection.`
       );
     }

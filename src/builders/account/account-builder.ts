@@ -214,13 +214,13 @@ export class AccountBuilder extends BaseServiceBuilder {
     if (
       isUserInitiated &&
       this.kit.userAccountId &&
-      this.kit.operationalMode === 'provideBytes' &&
+      (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop') &&
       params.transfers.length === 1
     ) {
       const receiverTransfer = params.transfers[0];
       const amountValue =
         typeof receiverTransfer.amount === 'string' ||
-        typeof receiverTransfer.amount === 'number'
+          typeof receiverTransfer.amount === 'number'
           ? receiverTransfer.amount
           : receiverTransfer.amount.toString();
 
@@ -235,13 +235,11 @@ export class AccountBuilder extends BaseServiceBuilder {
         const sdkHbarAmount = Hbar.fromString(amountValue.toString());
 
         this.logger.info(
-          `[AccountBuilder.transferHbar] Configuring user-initiated scheduled transfer: ${sdkHbarAmount.toString()} from ${
-            this.kit.userAccountId
+          `[AccountBuilder.transferHbar] Configuring user-initiated scheduled transfer: ${sdkHbarAmount.toString()} from ${this.kit.userAccountId
           } to ${recipientAccountId.toString()}`
         );
         this.addNote(
-          `Configured HBAR transfer from your account (${
-            this.kit.userAccountId
+          `Configured HBAR transfer from your account (${this.kit.userAccountId
           }) to ${recipientAccountId.toString()} for ${sdkHbarAmount.toString()}.`
         );
 
@@ -264,7 +262,7 @@ export class AccountBuilder extends BaseServiceBuilder {
 
         const amountValue =
           typeof transferInput.amount === 'string' ||
-          typeof transferInput.amount === 'number'
+            typeof transferInput.amount === 'number'
             ? transferInput.amount
             : transferInput.amount.toString();
 

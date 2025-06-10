@@ -166,15 +166,13 @@ export abstract class BaseHederaTransactionTool<
           const pubKeyString = operatorPubKey.toStringDer();
           (specificCallArgs as any)[keyField] = pubKeyString;
           this.logger.info(
-            `Substituted ${
-              keyField as string
+            `Substituted ${keyField as string
             } with current signer's public key.`
           );
         } catch (error) {
           const typedError = error as Error;
           this.logger.error(
-            `Failed to get current signer's public key for ${
-              keyField as string
+            `Failed to get current signer's public key for ${keyField as string
             } substitution: ${typedError.message}`,
             error
           );
@@ -267,7 +265,7 @@ export abstract class BaseHederaTransactionTool<
     return (
       !this.neverScheduleThisTool &&
       (metaOptions?.schedule ??
-        (this.hederaKit.operationalMode === 'provideBytes' &&
+        ((this.hederaKit.operationalMode === 'provideBytes' || this.hederaKit.operationalMode === 'human-in-the-loop') &&
           this.hederaKit.scheduleUserTransactionsInBytesMode))
     );
   }
@@ -438,8 +436,7 @@ export abstract class BaseHederaTransactionTool<
                 schemaDefinedDefaultValue = defaultValueOrFn();
               } catch (eDefaultFn) {
                 this.logger.warn(
-                  `Could not execute default value function for key ${key}. Error: ${
-                    (eDefaultFn as Error).message
+                  `Could not execute default value function for key ${key}. Error: ${(eDefaultFn as Error).message
                   }`
                 );
                 schemaDefinedDefaultValue = '[dynamic schema default]';
@@ -492,7 +489,7 @@ export abstract class BaseHederaTransactionTool<
       const allNotes = [...zodSchemaInfoNotes, ...builderAppliedDefaultNotes];
       this.logger.debug('All Notes combined:', allNotes);
 
-      if (this.hederaKit.operationalMode === 'directExecution') {
+      if (this.hederaKit.operationalMode === 'directExecution' || this.hederaKit.operationalMode === 'autonomous') {
         return this._handleDirectExecution(
           builder,
           llmProvidedMetaOptions,

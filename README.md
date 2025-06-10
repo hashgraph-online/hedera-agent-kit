@@ -133,7 +133,7 @@ async function main() {
 
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,
@@ -148,21 +148,27 @@ main().catch(console.error);
 
 Understanding these concepts will help you make the most of the Hedera Agent Kit:
 
+> **Note on Operational Modes**: The operational mode names have been updated for clarity:
+> - `'autonomous'` (previously `'directExecution'`): Agent executes transactions directly
+> - `'human-in-the-loop'` (previously `'provideBytes'`): Agent prepares transactions for user signing
+> 
+> The old names (`'directExecution'` and `'provideBytes'`) are still supported for backward compatibility.
+
 - **`HederaConversationalAgent`**: The primary interface for building chat-based applications. It combines the power of an LLM with the Hedera-specific tools provided by `HederaAgentKit`.
 - **`HederaAgentKit`**: The core engine that bundles tools, manages network clients, and holds the `signer` configuration. It's used internally by `HederaConversationalAgent` but can also be used directly for more programmatic control.
 - **Signers (`AbstractSigner`)**: Determine how transactions are signed and paid for:
   - `ServerSigner`: Holds a private key directly. Useful for backend agents where the agent's account pays for transactions it executes.
   - `BrowserSigner` (Conceptual for this README): Represents integrating with a user's browser wallet (e.g., HashPack). The agent prepares transaction bytes, and the user signs and submits them via their wallet.
 - **Operational Modes**: Configure how the agent handles transactions:
-  - `operationalMode: 'directExecution'`: Agent signs and submits all transactions using its `signer`. The agent's operator account pays.
-  - `operationalMode: 'provideBytes'`: Agent returns transaction bytes. Your application (and the user, via their wallet) is responsible for signing and submitting. This is key for user-centric apps.
-  - `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'provideBytes'`, this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer _my_ HBAR..."). The agent's operator account pays to _create the schedule entity_, and the user pays for the _actual scheduled transaction_ when they sign the `ScheduleSignTransaction`.
+  - `operationalMode: 'autonomous'` (legacy: `'directExecution'`): Agent signs and submits all transactions using its `signer`. The agent's operator account pays.
+  - `operationalMode: 'human-in-the-loop'` (legacy: `'provideBytes'`): Agent returns transaction bytes. Your application (and the user, via their wallet) is responsible for signing and submitting. This is key for user-centric apps.
+  - `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'human-in-the-loop'` (or legacy `'provideBytes'`), this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer _my_ HBAR..."). The agent's operator account pays to _create the schedule entity_, and the user pays for the _actual scheduled transaction` when they sign the `ScheduleSignTransaction`.
   - `metaOptions: { schedule: true }`: Allows the LLM to explicitly request scheduling for any tool call, overriding defaults.
 - **Human-in-the-Loop Flow**: The Quick Start example demonstrates this. The agent first creates a schedule (agent pays). Then, after user confirmation, it prepares a `ScheduleSignTransaction` (user pays to sign and submit this, triggering the original scheduled transaction).
 
 ### Choosing Between Operational Modes
 
-**Autonomous Agent Mode** (`operationalMode: 'directExecution'`)
+**Autonomous Agent Mode** (`operationalMode: 'autonomous'`)
 - Best for: Backend services, autonomous agents, testing and development
 - The agent's account signs and pays for all transactions
 - Simpler implementation - no user interaction needed
@@ -174,7 +180,7 @@ Understanding these concepts will help you make the most of the Hedera Agent Kit
 
 ```typescript
 const agent = new HederaConversationalAgent(agentSigner, {
-  operationalMode: 'directExecution',
+  operationalMode: 'autonomous',
   openAIApiKey: process.env.OPENAI_API_KEY,
 });
 
@@ -182,7 +188,7 @@ const agent = new HederaConversationalAgent(agentSigner, {
 // Agent directly executes the transfer using its own account
 ```
 
-**Human-in-the-Loop Mode** (`operationalMode: 'provideBytes'`)
+**Human-in-the-Loop Mode** (`operationalMode: 'human-in-the-loop'`)
 - Best for: User-facing applications, wallets, dApps
 - Agent prepares transactions, users sign with their own accounts
 - Maintains user custody of keys and funds
@@ -194,7 +200,7 @@ const agent = new HederaConversationalAgent(agentSigner, {
 
 ```typescript
 const agent = new HederaConversationalAgent(agentSigner, {
-  operationalMode: 'provideBytes',
+  operationalMode: 'human-in-the-loop',
   userAccountId: userAccountId,
   openAIApiKey: process.env.OPENAI_API_KEY,
 });
@@ -214,7 +220,7 @@ To send a user's message to the agent and receive a response:
 ```typescript
 // Initialize the agent as shown in the Quick Start example
 const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-  operationalMode: 'provideBytes',
+  operationalMode: 'human-in-the-loop',
   userAccountId: userAccountId,
   openAIApiKey: openaiApiKey,
 });
@@ -362,7 +368,7 @@ Here's a complete example bringing all the concepts together:
 async function handleHederaConversation() {
   // Initialize agent
   const agent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     userAccountId: userAccountId,
     openAIApiKey: openaiApiKey,
   });
@@ -480,7 +486,7 @@ async function handleScheduledTransaction(
 // Usage with HederaConversationalAgent
 async function exampleScheduledTransactionFlow() {
   const agent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     userAccountId: userAccountId,
     scheduleUserTransactionsInBytesMode: true, // Auto-schedule user transactions
   });
@@ -644,7 +650,7 @@ async function useKitDirectly() {
     process.env.HEDERA_PRIVATE_KEY!,
     'testnet'
   );
-  const kit = new HederaAgentKit(signer, undefined, 'directExecution');
+  const kit = new HederaAgentKit(signer, undefined, 'autonomous');
   await kit.initialize();
 
   // Transfer HBAR
@@ -789,7 +795,7 @@ async function useCustomPlugin() {
       packages: ['@my-org/my-hedera-plugin'], // NPM package plugin
       appConfig: { customSetting: 'value' }, // Custom config passed to plugins
     },
-    'directExecution'
+    'autonomous'
   );
 
   await kit.initialize();
@@ -815,7 +821,7 @@ interface HederaConversationalAgentOptions {
 
   // Agent Configuration
   userAccountId?: string; // User's account ID for user-centric operations
-  operationalMode?: AgentOperationalMode; // 'directExecution' or 'provideBytes'
+  operationalMode?: AgentOperationalMode; // 'autonomous' or 'human-in-the-loop' (legacy: 'directExecution' or 'provideBytes')
   scheduleUserTransactionsInBytesMode?: boolean; // Auto-schedule user transactions
 
   // Plugin Configuration

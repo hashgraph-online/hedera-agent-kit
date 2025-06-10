@@ -144,8 +144,8 @@ export class HederaConversationalAgent {
       this.config.scheduleUserTransactionsInBytesMode,
       initialModelCapability,
       this.config.openAIModelName ||
-        process.env.OPENAI_MODEL_NAME ||
-        'gpt-4o-mini',
+      process.env.OPENAI_MODEL_NAME ||
+      'gpt-4o-mini',
       this.config.mirrorNodeConfig,
       shouldDisableLogs
     );
@@ -192,46 +192,44 @@ export class HederaConversationalAgent {
     }
     messageParts.push(
       `You are a helpful Hedera assistant. Your primary operator account is ${agentOperatorId}. ` +
-        `You have tools to interact with the Hedera network. ` +
-        `When using any tool, provide all necessary parameters as defined by that tool's schema and description.`
+      `You have tools to interact with the Hedera network. ` +
+      `When using any tool, provide all necessary parameters as defined by that tool's schema and description.`
     );
     if (userAccId) {
       messageParts.push(
         `The user you are assisting has a personal Hedera account ID: ${userAccId}. ` +
-          `IMPORTANT: When the user says things like "I want to send HBAR" or "transfer my tokens", you MUST use ${userAccId} as the sender/from account. ` +
-          `For example, if user says "I want to send 2 HBAR to 0.0.800", you must set up a transfer where ${userAccId} sends the HBAR, not your operator account.`
+        `IMPORTANT: When the user says things like "I want to send HBAR" or "transfer my tokens", you MUST use ${userAccId} as the sender/from account. ` +
+        `For example, if user says "I want to send 2 HBAR to 0.0.800", you must set up a transfer where ${userAccId} sends the HBAR, not your operator account.`
       );
     }
-    if (this.hederaKit.operationalMode === 'directExecution') {
+    if (this.hederaKit.operationalMode === 'directExecution' || this.hederaKit.operationalMode === 'autonomous') {
       messageParts.push(
-        `\nOPERATIONAL MODE: 'directExecution'. Your goal is to execute transactions directly using your tools. ` +
-          `Your account ${agentOperatorId} will be the payer for these transactions. ` +
-          `Even if the user's account (${
-            userAccId || 'a specified account'
-          }) is the actor in the transaction body (e.g., sender of HBAR), ` +
-          `you (the agent with operator ${agentOperatorId}) are still executing and paying. For HBAR transfers, ensure the amounts in the 'transfers' array sum to zero (as per tool schema), balancing with your operator account if necessary.`
+        `\nOPERATIONAL MODE: 'autonomous' (directExecution). Your goal is to execute transactions directly using your tools. ` +
+        `Your account ${agentOperatorId} will be the payer for these transactions. ` +
+        `Even if the user's account (${userAccId || 'a specified account'
+        }) is the actor in the transaction body (e.g., sender of HBAR), ` +
+        `you (the agent with operator ${agentOperatorId}) are still executing and paying. For HBAR transfers, ensure the amounts in the 'transfers' array sum to zero (as per tool schema), balancing with your operator account if necessary.`
       );
     } else {
       if (this.config.scheduleUserTransactionsInBytesMode && userAccId) {
         messageParts.push(
-          `\nOPERATIONAL MODE: 'provideBytes' with scheduled transactions for user actions. ` +
-            `When a user asks for a transaction to be prepared (e.g., creating a token, topic, transferring assets for them to sign, etc), ` +
-            `you MUST default to creating a Scheduled Transaction using the appropriate tool with the metaOption 'schedule: true'. ` +
-            `The user (with account ID ${userAccId}) will be the one to ultimately pay for and (if needed) sign the inner transaction. ` +
-            `Your operator account (${agentOperatorId}) will pay for creating the schedule entity itself. ` +
-            `You MUST return the ScheduleId and details of the scheduled operation in a structured JSON format with these fields: success, op, schedule_id, description, payer_account_id_scheduled_tx, and scheduled_transaction_details.` +
-            `\nOnce a transaction is scheduled and you\'ve provided the Schedule ID, you should ask the user if they want to sign and execute it. If they agree, use the \'hedera-sign-and-execute-scheduled-transaction\' tool, providing the Schedule ID. This tool will prepare a ScheduleSignTransaction. If the agent is also configured for \'provideBytes\', this ScheduleSignTransaction will be returned as bytes for the user to sign and submit using their account ${userAccId}. If the agent is in \'directExecution\' mode for the ScheduleSign part (not typical for user-scheduled flows but possible), the agent would sign and submit it.`
+          `\nOPERATIONAL MODE: 'human-in-the-loop' (provideBytes) with scheduled transactions for user actions. ` +
+          `When a user asks for a transaction to be prepared (e.g., creating a token, topic, transferring assets for them to sign, etc), ` +
+          `you MUST default to creating a Scheduled Transaction using the appropriate tool with the metaOption 'schedule: true'. ` +
+          `The user (with account ID ${userAccId}) will be the one to ultimately pay for and (if needed) sign the inner transaction. ` +
+          `Your operator account (${agentOperatorId}) will pay for creating the schedule entity itself. ` +
+          `You MUST return the ScheduleId and details of the scheduled operation in a structured JSON format with these fields: success, op, schedule_id, description, payer_account_id_scheduled_tx, and scheduled_transaction_details.` +
+          `\nOnce a transaction is scheduled and you\'ve provided the Schedule ID, you should ask the user if they want to sign and execute it. If they agree, use the \'hedera-sign-and-execute-scheduled-transaction\' tool, providing the Schedule ID. This tool will prepare a ScheduleSignTransaction. If the agent is also configured for \'provideBytes\', this ScheduleSignTransaction will be returned as bytes for the user to sign and submit using their account ${userAccId}. If the agent is in \'directExecution\' mode for the ScheduleSign part (not typical for user-scheduled flows but possible), the agent would sign and submit it.`
         );
       } else {
         messageParts.push(
-          `\nOPERATIONAL MODE: 'provideBytes'. Your goal is to provide transaction bytes directly. ` +
-            `When a user asks for a transaction to be prepared (e.g., for them to sign, or for scheduling without the default scheduling flow), ` +
-            `you MUST call the appropriate tool. If you want raw bytes for the user to sign for their own account ${
-              userAccId || 'if specified'
-            }, ensure the tool constructs the transaction body accordingly and use metaOption 'returnBytes: true' if available, or ensure the builder is configured for the user. ` +
-            (userAccId
-              ? `If the transaction body was constructed to reflect the user's account ${userAccId} as the actor, also inform the user the application can adapt these bytes for their signing and payment using their account ${userAccId}.`
-              : '')
+          `\nOPERATIONAL MODE: 'human-in-the-loop' (provideBytes). Your goal is to provide transaction bytes directly. ` +
+          `When a user asks for a transaction to be prepared (e.g., for them to sign, or for scheduling without the default scheduling flow), ` +
+          `you MUST call the appropriate tool. If you want raw bytes for the user to sign for their own account ${userAccId || 'if specified'
+          }, ensure the tool constructs the transaction body accordingly and use metaOption 'returnBytes: true' if available, or ensure the builder is configured for the user. ` +
+          (userAccId
+            ? `If the transaction body was constructed to reflect the user's account ${userAccId} as the actor, also inform the user the application can adapt these bytes for their signing and payment using their account ${userAccId}.`
+            : '')
         );
       }
     }
