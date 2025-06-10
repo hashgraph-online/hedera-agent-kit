@@ -1,3 +1,82 @@
+# Hedera Agent Kit
+
+![npm version](https://badgen.net/npm/v/@hashgraphonline/hedera-agent-kit)
+![license](https://badgen.net/github/license/hedera-dev/hedera-agent-kit)
+![build](https://badgen.net/github/checks/hedera-dev/hedera-agent-kit)
+
+Bring Hedera transactions to your LLM-driven agents **in three lines of code**.
+
+## 🚀 60-Second Quick Start
+
+### 1. Install & Prerequisites
+
+```bash
+npm install @hashgraphonline/hedera-agent-kit
+# or
+yarn add @hashgraphonline/hedera-agent-kit
+```
+
+> Prerequisites: Node ≥ 18, an OpenAI API key, and a Hedera *testnet* account + private key (grab one free at <https://portal.hedera.com>).
+
+### 2. Add your env vars
+
+Create a `.env` file next to your script:
+
+```env
+OPENAI_API_KEY=sk-...
+HEDERA_ACCOUNT_ID=0.0.YourOperator
+HEDERA_PRIVATE_KEY=302e020100300506032b6570...
+HEDERA_NETWORK=testnet
+```
+
+### 3. Run the hello-world snippet
+
+```ts
+import 'dotenv/config';
+import { ServerSigner, HederaConversationalAgent } from '@hashgraphonline/hedera-agent-kit';
+
+const signer = new ServerSigner(process.env.HEDERA_ACCOUNT_ID!, process.env.HEDERA_PRIVATE_KEY!, 'testnet');
+const agent  = new HederaConversationalAgent(signer, { openAIApiKey: process.env.OPENAI_API_KEY, operationalMode: 'autonomous' });
+await agent.initialize();
+
+const history: Array<{type:'human'|'ai';content:string}> = [];
+async function ask(prompt: string) {
+  history.push({type:'human', content: prompt});
+  const res = await agent.processMessage(prompt, history);
+  history.push({type:'ai', content: res.output});
+  console.log(res.output);
+}
+
+await ask('What is my HBAR balance?');
+```
+
+### 4. Deeper dive / interactive demos
+
+```bash
+# 1. Clone the repo (only needed for full demos)
+git clone https://github.com/hedera-dev/hedera-agent-kit.git
+cd hedera-agent-kit
+cp sample.env .env   # edit with your keys
+npm install
+
+# 2. Run a demo
+npm run demo:auto            # Autonomous mode (agent signs)
+
+# – or –
+USER_ACCOUNT_ID=0.0.YourUser \
+USER_PRIVATE_KEY=302e02... \
+npm run demo:hitl           # Human-in-the-loop mode (you sign)
+```
+
+- **Autonomous Mode**: Agent signs and pays itself (ideal for backend or bot scenarios).
+- **Human-in-the-Loop**: Agent returns transaction bytes for the user to sign in their wallet (e.g., HashPack via WalletConnect).
+- **Scheduled Transactions**: Built-in support for workflows where AI prepares transactions for later approval.
+
+---
+
+<details>
+<summary>💡  Key Features, Concepts, API, and Advanced Guides</summary>
+
 # hedera-agent-kit
 
 Build LLM-powered applications that interact with the Hedera Network. Create conversational agents that can understand user requests in natural language and execute Hedera transactions, or build backend systems that leverage AI for on-chain operations.
@@ -6,8 +85,8 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
 
 - **Conversational Hedera**: Easily build chat-based interfaces for Hedera actions.
 - **Flexible Transaction Handling**:
-  - **Direct Execution**: For autonomous agents or backend control.
-  - **Provide Bytes**: For user-centric apps where users sign with their own wallets (e.g., HashPack via WalletConnect).
+  - **Autonomous Mode**: Agent signs and pays itself (ideal for backend or bot scenarios).
+  - **Human-in-the-Loop**: Agent returns transaction bytes for the user to sign in their wallet (e.g., HashPack via WalletConnect).
   - **Scheduled Transactions**: Built-in support for "human-in-the-loop" workflows, where AI prepares transactions for user review and approval.
 - **Comprehensive Toolset**: Pre-built tools for HTS, HCS, HBAR transfers, account management, files, and smart contracts.
 - **Extensible**: Add your own custom tools with the plugin system.
@@ -26,7 +105,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
     - [Understanding Agent Responses](#understanding-agent-responses)
     - [Handling Different Response Types](#handling-different-response-types)
       - [1. Text-only Responses](#1-text-only-responses)
-      - [2. Transaction Bytes (provideBytes mode)](#2-transaction-bytes-providebytes-mode)
+      - [2. Transaction Bytes (human-in-the-loop mode)](#2-transaction-bytes-human-in-the-loop-mode)
       - [3. Schedule IDs (scheduled transactions)](#3-schedule-ids-scheduled-transactions)
     - [Working with Chat History](#working-with-chat-history)
     - [Example: Complete Prompt Handling Flow](#example-complete-prompt-handling-flow)
@@ -55,9 +134,9 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
 ## Installation
 
 ```bash
-npm install @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+npm install @hashgraphonline/hedera-agent-kit
 # or
-yarn add @hashgraphonline/hedera-agent-kit @hashgraph/sdk zod @langchain/openai @langchain/core
+yarn add @hashgraphonline/hedera-agent-kit 
 ```
 
 For frontend integration with WalletConnect:
@@ -255,7 +334,7 @@ The `processMessage` method returns an `AgentResponse` object with these key pro
 ```typescript
 interface AgentResponse {
   output: string; // The text response to show to the user
-  transactionBytes?: string; // Base64-encoded transaction bytes (when in 'provideBytes' mode)
+  transactionBytes?: string; // Base64-encoded transaction bytes (when in human-in-the-loop mode)
   scheduleId?: ScheduleId; // The schedule ID when a transaction was scheduled
   error?: string; // Error message if something went wrong
 }
@@ -274,7 +353,7 @@ const response = await handleUserMessage("What's my HBAR balance?");
 console.log(response.output); // Display to the user
 ```
 
-#### 2. Transaction Bytes (provideBytes mode)
+#### 2. Transaction Bytes (human-in-the-loop mode)
 
 When the agent generates transaction bytes, you'll need to present them to the user for signing:
 
@@ -860,7 +939,7 @@ graph TD;
     subgraph ExecutionPath ["Transaction Execution / Byte Generation"]
         ServiceBuilders -- "Based on OpModes & Tool Logic" --> DecisionPoint["Execute or GetBytes?"];
         DecisionPoint -- "Execute (Agent Pays/Signs via ServerSigner)" --> Signer;
-        DecisionPoint -- "ProvideBytes (User Pays/Signs)" --> TxBytes["Transaction Bytes"];
+        DecisionPoint -- "HumanInLoop (User Pays/Signs)" --> TxBytes["Transaction Bytes"];
         DecisionPoint -- "Schedule (Agent Pays for CreateSchedule)" --> Signer;
         TxBytes -- "Returned to AppCode --> User Wallet" --> UserWallet["User Wallet (HashPack, etc)"];
         Signer -- "Uses SDK Client" --> HederaNetwork["Hedera Network"];
@@ -920,3 +999,5 @@ We welcome contributions! Please see our [CONTRIBUTING.md](https://github.com/he
 ## License
 
 Apache 2.0
+
+</details>
