@@ -56,7 +56,7 @@ describe('Query Tool Notes System', () => {
     const hederaKit = new HederaAgentKit(
       signer,
       undefined,
-      'provideBytes',
+      'human-in-the-loop',
       undefined,
       true,
       ModelCapability.SMALL,
@@ -102,7 +102,7 @@ describe('Query Tool Notes System', () => {
     const hederaKit = new HederaAgentKit(
       signer,
       undefined,
-      'provideBytes',
+      'human-in-the-loop',
       undefined,
       true,
       ModelCapability.UNLIMITED,

@@ -1,10 +1,10 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-import { 
-  HederaConversationalAgent, 
-  ServerSigner, 
-  formatCost 
+import {
+  HederaConversationalAgent,
+  ServerSigner,
+  formatCost
 } from '@hashgraphonline/hedera-agent-kit';
 
 /**
@@ -26,7 +26,7 @@ async function main() {
   const signer = new ServerSigner(operatorId, operatorKey, network as any);
   const agent = new HederaConversationalAgent(signer, {
     openAIApiKey: openaiApiKey,
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     verbose: false,
   });
 
@@ -44,16 +44,16 @@ async function main() {
 
   for (const query of queries) {
     console.log(`\n💬 User: ${query}`);
-    
+
     // Process the message
     const response = await agent.processMessage(query, chatHistory);
-    
+
     // Update chat history
     chatHistory.push({ type: 'human', content: query });
     chatHistory.push({ type: 'ai', content: response.output });
-    
+
     console.log(`🤖 Agent: ${response.output}`);
-    
+
     // Display token usage for this request
     if (response.tokenUsage && response.cost) {
       console.log('\n📊 Token Usage:');
@@ -88,7 +88,7 @@ async function main() {
   const hbarPriceUSD = 0.05; // Example HBAR price
   const hbarCost = totalCostUSD / hbarPriceUSD;
   const creditsDeducted = Math.ceil(hbarCost * 1000); // 1 credit = 0.001 HBAR
-  
+
   console.log(`   - Total USD cost: $${totalCostUSD.toFixed(6)}`);
   console.log(`   - HBAR equivalent: ${hbarCost.toFixed(4)} HBAR`);
   console.log(`   - Credits to deduct: ${creditsDeducted} credits`);

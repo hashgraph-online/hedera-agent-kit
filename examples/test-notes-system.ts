@@ -40,7 +40,7 @@ async function testNotes() {
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     userAccountId: userAccountId,
     verbose: true,
     openAIApiKey: openaiApiKey,

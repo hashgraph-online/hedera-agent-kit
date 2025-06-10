@@ -217,7 +217,7 @@ export interface GenerateTransactionParams extends Record<string, unknown> {
 
 export interface GenerateTransactionResult {
   operation: 'generate_transaction_bytes';
-  mode: 'provideBytes';
+  mode: 'human-in-the-loop';
   result: any;
   transactionBytes?: string;
   message: string;
@@ -260,7 +260,7 @@ export interface ExecuteTransactionParams extends Record<string, unknown> {
 
 export interface ExecuteTransactionResult {
   operation: 'execute_transaction';
-  mode: 'directExecution';
+  mode: 'autonomous';
   result: any;
   message: string;
   status: 'completed' | 'failed' | 'unauthorized' | 'forbidden' | 'insufficient_credits';

@@ -113,7 +113,7 @@ export class HederaConversationalAgent {
     config: HederaConversationalAgentConfig = {}
   ) {
     this.config = {
-      operationalMode: 'provideBytes',
+      operationalMode: 'autonomous',
       verbose: false,
       scheduleUserTransactionsInBytesMode: true,
       ...config,
@@ -202,6 +202,7 @@ export class HederaConversationalAgent {
         `For example, if user says "I want to send 2 HBAR to 0.0.800", you must set up a transfer where ${userAccId} sends the HBAR, not your operator account.`
       );
     }
+    // @ts-ignore - directExecution is deprecated
     if (this.hederaKit.operationalMode === 'directExecution' || this.hederaKit.operationalMode === 'autonomous') {
       messageParts.push(
         `\nOPERATIONAL MODE: 'autonomous' (directExecution). Your goal is to execute transactions directly using your tools. ` +

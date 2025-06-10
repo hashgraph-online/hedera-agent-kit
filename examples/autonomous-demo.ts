@@ -75,7 +75,7 @@ ${hederaGradient(
     const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
     const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-        operationalMode: 'directExecution',
+        operationalMode: 'autonomous',
         verbose: false,
         openAIApiKey: openaiApiKey,
         openAIModelName: 'gpt-4o-mini',

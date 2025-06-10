@@ -4,7 +4,7 @@
 ![license](https://badgen.net/github/license/hedera-dev/hedera-agent-kit)
 ![build](https://badgen.net/github/checks/hedera-dev/hedera-agent-kit)
 
-Bring Hedera transactions to your LLM-driven agents **in three lines of code**.
+Build Hedera powered AI agents **in under a minute**.
 
 ## 🚀 60-Second Quick Start
 
@@ -16,7 +16,18 @@ npm install @hashgraphonline/hedera-agent-kit
 yarn add @hashgraphonline/hedera-agent-kit
 ```
 
-> Prerequisites: Node ≥ 18, an OpenAI API key, and a Hedera *testnet* account + private key (grab one free at <https://portal.hedera.com>).
+<details>
+<summary>For frontend integration with WalletConnect</summary>
+
+```bash
+npm install @hashgraphonline/hashinal-wc
+# or
+yarn add @hashgraphonline/hashinal-wc
+```
+</details>
+<br>
+
+> Prerequisites: Node ≥ 18, an OpenAI API key, and a Hedera *testnet* account + private key (grab one free at the [Hedera Portal](https://portal.hedera.com/register>)).
 
 ### 2. Add your env vars
 
@@ -24,62 +35,79 @@ Create a `.env` file next to your script:
 
 ```env
 OPENAI_API_KEY=sk-...
-HEDERA_ACCOUNT_ID=0.0.YourOperator
+HEDERA_ACCOUNT_ID=0.0.xxx
 HEDERA_PRIVATE_KEY=302e020100300506032b6570...
 HEDERA_NETWORK=testnet
 ```
 
-### 3. Run the hello-world snippet
+### 3. Run the example
 
 ```ts
-import 'dotenv/config';
 import { ServerSigner, HederaConversationalAgent } from '@hashgraphonline/hedera-agent-kit';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
-const signer = new ServerSigner(process.env.HEDERA_ACCOUNT_ID!, process.env.HEDERA_PRIVATE_KEY!, 'testnet');
-const agent  = new HederaConversationalAgent(signer, { openAIApiKey: process.env.OPENAI_API_KEY, operationalMode: 'autonomous' });
-await agent.initialize();
+const main = async () => {
+    // setting up the agent
+    const signer = new ServerSigner(process.env.HEDERA_ACCOUNT_ID!, process.env.HEDERA_PRIVATE_KEY!, 'testnet');
+    const agent = new HederaConversationalAgent(signer, {
+        openAIApiKey: process.env.OPENAI_API_KEY,
+        operationalMode: 'autonomous'
+    });
+    await agent.initialize();
 
-const history: Array<{type:'human'|'ai';content:string}> = [];
-async function ask(prompt: string) {
-  history.push({type:'human', content: prompt});
-  const res = await agent.processMessage(prompt, history);
-  history.push({type:'ai', content: res.output});
-  console.log(res.output);
+    const history: Array<{ type: 'human' | 'ai'; content: string }> = [];
+
+    // function for processing user prompts and agent responses
+    async function ask(prompt: string) {
+        history.push({ type: 'human', content: prompt });
+        const res = await agent.processMessage(prompt, history);
+        history.push({ type: 'ai', content: res.message! });
+        console.log(res.message);
+    }
+
+    await ask('What is my HBAR balance?');
 }
 
-await ask('What is my HBAR balance?');
+main();
 ```
 
-### 4. Deeper dive / interactive demos
+### 4. Interactive demos
+
+To get hands on experience using the Hedera Agent Kit, clone the repo and run our interactive CLI demos.
 
 ```bash
-# 1. Clone the repo (only needed for full demos)
 git clone https://github.com/hedera-dev/hedera-agent-kit.git
 cd hedera-agent-kit
-cp sample.env .env   # edit with your keys
 npm install
-
-# 2. Run a demo
-npm run demo:auto            # Autonomous mode (agent signs)
-
-# – or –
-USER_ACCOUNT_ID=0.0.YourUser \
-USER_PRIVATE_KEY=302e02... \
-npm run demo:hitl           # Human-in-the-loop mode (you sign)
+cp .env.example .env   # edit with your keys
 ```
+
+There are two operational modes:
 
 - **Autonomous Mode**: Agent signs and pays itself (ideal for backend or bot scenarios).
 - **Human-in-the-Loop**: Agent returns transaction bytes for the user to sign in their wallet (e.g., HashPack via WalletConnect).
-- **Scheduled Transactions**: Built-in support for workflows where AI prepares transactions for later approval.
+
+#### Run the autonomous agent demo
+
+```bash
+npm run demo:auto            # Autonomous mode (agent signs)
+```
+#### Run the human-in-the-loop demo
+
+Add another account and private key in .env to act as a mock user.
+
+```bash
+USER_ACCOUNT_ID=0.0.xxx
+USER_PRIVATE_KEY=302e02...
+```
+Run the CLI demo.
+```bash
+npm run demo:hitl           # Human-in-the-loop mode (user signs)
+```
 
 ---
 
-<details>
-<summary>💡  Key Features, Concepts, API, and Advanced Guides</summary>
-
-# hedera-agent-kit
-
-Build LLM-powered applications that interact with the Hedera Network. Create conversational agents that can understand user requests in natural language and execute Hedera transactions, or build backend systems that leverage AI for on-chain operations.
 
 ## Key Features
 
@@ -97,7 +125,6 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
 - [hedera-agent-kit]
   - [Key Features](#key-features)
   - [Table of Contents](#table-of-contents)
-  - [Installation](#installation)
   - [Quick Start: Your First Conversational Hedera Agent](#quick-start-your-first-conversational-hedera-agent)
   - [Core Concepts](#core-concepts)
   - [Handling User Prompts](#handling-user-prompts)
@@ -131,52 +158,10 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
   - [Contributing](#contributing)
   - [License](#license)
 
-## Installation
 
-```bash
-npm install @hashgraphonline/hedera-agent-kit
-# or
-yarn add @hashgraphonline/hedera-agent-kit 
-```
 
-For frontend integration with WalletConnect:
+_
 
-```bash
-npm install @hashgraphonline/hashinal-wc
-# or
-yarn add @hashgraphonline/hashinal-wc
-```
-
-_(Ensure you have `dotenv` for environment variable management if you use `.env` files.)_
-
-## Quick Start: Your First Conversational Hedera Agent
-
-This example demonstrates setting up the `HederaConversationalAgent` for a user-centric scenario where the user signs scheduled transactions. The agent's operator account will pay to create the schedule, and the user's account will be set to pay for the actual scheduled transaction when it's signed and submitted by the user.
-
-**1. Set up your `.env` file:**
-
-```env
-OPENAI_API_KEY="sk-..."
-HEDERA_ACCOUNT_ID="0.0.YOUR_AGENT_OPERATOR_ID"
-HEDERA_PRIVATE_KEY="your_agent_operator_private_key"
-HEDERA_NETWORK="testnet"
-USER_ACCOUNT_ID="0.0.YOUR_USER_ACCOUNT_ID"
-USER_PRIVATE_KEY="your_user_private_key"
-```
-
-**2. Run the interactive demo:**
-
-For human-in-the-loop workflow (user signs transactions):
-```bash
-npm install
-npm run demo:hitl
-```
-
-For autonomous agent workflow (agent executes transactions directly):
-```bash
-npm install
-npm run demo:auto
-```
 
 **3. Example Interaction:**
 
@@ -631,84 +616,15 @@ async function pollScheduleStatus(
 
 The Hedera Agent Kit provides a comprehensive set of tools organized by service type. These tools can be used both by the conversational agent and programmatically.
 
-### Account Management Tools
+For a complete list of all available tools with descriptions and usage examples, see **[docs/TOOLS.md](docs/TOOLS.md)**.
 
-| Tool Name                                       | Description                                        | Example Usage                                             |
-| ----------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
-| `hedera-account-create`                         | Creates a new Hedera account                       | Create an account with initial balance and key            |
-| `hedera-account-update`                         | Updates properties of an existing account          | Change account memo, auto-renew period, etc.              |
-| `hedera-account-delete`                         | Deletes an account and transfers remaining balance | Delete an account and transfer funds to another account   |
-| `hedera-transfer-hbar`                          | Transfers HBAR between accounts                    | Send HBAR from one account to another                     |
-| `hedera-approve-hbar-allowance`                 | Approves an HBAR allowance for a spender account   | Grant permission for another account to spend your HBAR   |
-| `hedera-approve-fungible-token-allowance`       | Approves a fungible token allowance                | Grant permission for another account to spend your tokens |
-| `hedera-approve-token-nft-allowance`            | Approves an NFT allowance                          | Grant permission for another account to spend your NFTs   |
-| `hedera-revoke-hbar-allowance`                  | Revokes an HBAR allowance                          | Remove permission for an account to spend your HBAR       |
-| `hedera-revoke-fungible-token-allowance`        | Revokes a fungible token allowance                 | Remove permission for an account to spend your tokens     |
-| `hedera-sign-and-execute-scheduled-transaction` | Signs and executes a scheduled transaction         | User signs a transaction prepared by the agent            |
-
-
-### HBAR Transaction Tools
-
-| Tool Name                      | Description                           | Example Usage                                       |
-| ------------------------------ | ------------------------------------- | --------------------------------------------------- |
-| `hedera-account-transfer-hbar` | Transfers HBAR between accounts       | Send HBAR with memo support and detailed parameters |
-| `hedera-account-balance-hbar`  | Retrieves HBAR balance for an account | Check your HBAR balance                             |
-
-### HTS Token Service Tools
-
-| Tool Name                              | Description                                 | Example Usage                                           |
-| -------------------------------------- | ------------------------------------------- | ------------------------------------------------------- |
-| `hedera-hts-create-fungible-token`     | Creates a new fungible token                | Create a custom token with name, symbol, decimals, etc. |
-| `hedera-hts-create-nft`                | Creates a new NFT collection                | Create an NFT collection with configurable properties   |
-| `hedera-hts-mint-fungible-token`       | Mints additional supply of a fungible token | Add more tokens to circulation                          |
-| `hedera-hts-mint-nft`                  | Mints a new NFT within a collection         | Create a new NFT with metadata                          |
-| `hedera-hts-transfer-tokens`           | Transfers fungible tokens between accounts  | Send tokens from one account to another                 |
-| `hedera-hts-transfer-nft`              | Transfers NFT ownership                     | Send an NFT to another account                          |
-| `hedera-hts-associate-token`           | Associates a token to an account            | Enable an account to receive a token                    |
-| `hedera-hts-dissociate-tokens`         | Removes token associations                  | Remove a token from your account                        |
-| `hedera-hts-reject-tokens`             | Rejects automatically associated tokens     | Reject tokens you don't want                            |
-| `hedera-hts-burn-fungible-token`       | Burns fungible tokens (reduces supply)      | Remove tokens from circulation                          |
-| `hedera-hts-burn-nft`                  | Burns an NFT (destroys it)                  | Destroy an NFT permanently                              |
-| `hedera-hts-update-token`              | Updates token properties                    | Modify token name, symbol, or other properties          |
-| `hedera-hts-delete-token`              | Deletes a token                             | Remove a token completely                               |
-| `hedera-hts-pause-token`               | Pauses a token (prevents transfers)         | Temporarily freeze all transfers of a token             |
-| `hedera-hts-unpause-token`             | Unpauses a token                            | Resume transfers for a paused token                     |
-| `hedera-hts-freeze-token-account`      | Freezes a token for a specific account      | Prevent an account from transferring a specific token   |
-| `hedera-hts-unfreeze-token-account`    | Unfreezes a token for an account            | Allow transfers for a previously frozen account         |
-| `hedera-hts-grant-kyc-token`           | Grants KYC for a token to an account        | Approve KYC for an account to use a token               |
-| `hedera-hts-revoke-kyc-token`          | Revokes KYC for a token from an account     | Remove KYC approval for an account                      |
-| `hedera-hts-wipe-token-account`        | Wipes tokens from an account                | Remove tokens from an account                           |
-| `hedera-hts-token-fee-schedule-update` | Updates token fee schedule                  | Modify fees for a token                                 |
-| `hedera-airdrop-token`                 | Airdrops tokens to multiple recipients      | Send tokens to many accounts at once                    |
-| `hedera-claim-airdrop`                 | Claims an airdrop                           | Claim tokens sent to you                                |
-
-### HCS Consensus Service Tools
-
-| Tool Name                     | Description                    | Example Usage                           |
-| ----------------------------- | ------------------------------ | --------------------------------------- |
-| `hedera-create-topic`         | Creates a new HCS topic        | Create a topic for message consensus    |
-| `hedera-delete-topic`         | Deletes an HCS topic           | Remove a topic you created              |
-| `hedera-submit-topic-message` | Submits a message to a topic   | Send a message to be recorded on Hedera |
-| `hedera-get-topic-messages`   | Gets messages from a topic     | Retrieve messages from a topic          |
-| `hedera-get-topic-info`       | Gets information about a topic | Retrieve topic details                  |
-
-### File Service Tools
-
-| Tool Name            | Description                         | Example Usage                  |
-| -------------------- | ----------------------------------- | ------------------------------ |
-| `hedera-create-file` | Creates a new file on Hedera        | Store immutable data on Hedera |
-| `hedera-append-file` | Appends content to an existing file | Add more data to a file        |
-| `hedera-update-file` | Updates a file's contents           | Replace file contents          |
-| `hedera-delete-file` | Deletes a file                      | Remove a file                  |
-
-### Smart Contract Service Tools
-
-| Tool Name                 | Description                  | Example Usage                            |
-| ------------------------- | ---------------------------- | ---------------------------------------- |
-| `hedera-create-contract`  | Deploys a smart contract     | Deploy Solidity contract bytecode        |
-| `hedera-update-contract`  | Updates a contract           | Update contract properties               |
-| `hedera-delete-contract`  | Deletes a contract           | Remove a deployed contract               |
-| `hedera-execute-contract` | Executes a contract function | Call functions on your deployed contract |
+The tools are organized into the following categories:
+- **Account Management Tools** - Create, update, delete accounts, manage allowances
+- **HBAR Transaction Tools** - Transfer HBAR and check balances  
+- **HTS Token Service Tools** - Create, mint, transfer, and manage fungible tokens and NFTs
+- **HCS Consensus Service Tools** - Create topics and submit consensus messages
+- **File Service Tools** - Create, update, and manage files on Hedera
+- **Smart Contract Service Tools** - Deploy and interact with smart contracts
 
 ## Advanced Usage
 

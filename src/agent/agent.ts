@@ -65,7 +65,7 @@ export class HederaAgentKit {
   constructor(
     signer: AbstractSigner,
     pluginConfigInput?: PluginConfig | undefined,
-    initialOperationalMode: AgentOperationalMode = 'provideBytes',
+    initialOperationalMode: AgentOperationalMode = 'autonomous',
     userAccountId?: string,
     scheduleUserTransactionsInBytesMode: boolean = true,
     modelCapability: ModelCapability = ModelCapability.MEDIUM,
@@ -151,8 +151,7 @@ export class HederaAgentKit {
           );
         } catch (error: unknown) {
           this.logger.error(
-            `Failed to initialize directly provided plugin ${
-              pluginInstance.name
+            `Failed to initialize directly provided plugin ${pluginInstance.name
             }: ${error instanceof Error ? error.message : String(error)}`
           );
         }
@@ -307,8 +306,7 @@ export class HederaAgentKit {
       return await transactionId.getReceipt(this.client);
     } catch (error: unknown) {
       this.logger.error(
-        `Failed to get transaction receipt for ${transactionId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
+        `Failed to get transaction receipt for ${transactionId.toString()}: ${error instanceof Error ? error.message : String(error)
         }`
       );
       throw error;
@@ -361,8 +359,7 @@ export class HederaAgentKit {
       };
     } catch (error: unknown) {
       this.logger.error(
-        `Failed to sign scheduled transaction ${params.scheduleId.toString()}: ${
-          error instanceof Error ? error.message : String(error)
+        `Failed to sign scheduled transaction ${params.scheduleId.toString()}: ${error instanceof Error ? error.message : String(error)
         }`
       );
       return {

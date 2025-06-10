@@ -32,7 +32,7 @@ export async function initializeTestKit(): Promise<HederaAgentKit> {
 
   const signer = new ServerSigner(accountId, privateKey, 'testnet');
 
-  const kit = new HederaAgentKit(signer, { appConfig: { openAIApiKey } }, 'provideBytes', undefined, true, undefined, 'gpt-4o-mini'); 
+  const kit = new HederaAgentKit(signer, { appConfig: { openAIApiKey } }, 'human-in-the-loop', undefined, true, undefined, 'gpt-4o-mini');
   await kit.initialize();
   return kit;
 }
@@ -45,7 +45,7 @@ export async function createSimpleTestAgentExecutor(
   openAIApiKey: string
 ): Promise<AgentExecutor> {
   const tools = [tool];
-  
+
   const llm = new ChatOpenAI({
     apiKey: openAIApiKey,
     modelName: 'gpt-4o-mini',
@@ -105,7 +105,7 @@ export async function createTestAgentExecutor(
   openAIApiKey: string
 ): Promise<AgentExecutor> {
   const tools = [tool];
-  
+
   const llm = new ChatOpenAI({
     apiKey: openAIApiKey,
     modelName: 'gpt-4o-mini',
@@ -184,4 +184,4 @@ export function getToolOutputFromResult(agentResult: ChainValues): unknown {
 
   return toolOutputData;
 }
- 
+

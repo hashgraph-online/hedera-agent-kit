@@ -80,7 +80,7 @@ ${hederaGradient(
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: 'human-in-the-loop',
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,

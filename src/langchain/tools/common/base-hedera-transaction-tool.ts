@@ -265,6 +265,7 @@ export abstract class BaseHederaTransactionTool<
     return (
       !this.neverScheduleThisTool &&
       (metaOptions?.schedule ??
+        // @ts-ignore - provideBytes is deprecated
         ((this.hederaKit.operationalMode === 'provideBytes' || this.hederaKit.operationalMode === 'human-in-the-loop') &&
           this.hederaKit.scheduleUserTransactionsInBytesMode))
     );
@@ -488,7 +489,7 @@ export abstract class BaseHederaTransactionTool<
       );
       const allNotes = [...zodSchemaInfoNotes, ...builderAppliedDefaultNotes];
       this.logger.debug('All Notes combined:', allNotes);
-
+      // @ts-ignore - directExecution is deprecated
       if (this.hederaKit.operationalMode === 'directExecution' || this.hederaKit.operationalMode === 'autonomous') {
         return this._handleDirectExecution(
           builder,

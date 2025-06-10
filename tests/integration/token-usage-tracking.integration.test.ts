@@ -29,7 +29,7 @@ describe('Token Usage Tracking Integration', () => {
     const signer = new ServerSigner(testAccountId, testPrivateKey, 'testnet');
     const agent = new HederaConversationalAgent(signer, {
       openAIApiKey: openaiApiKey,
-      operationalMode: 'provideBytes',
+      operationalMode: 'human-in-the-loop',
       verbose: false,
       disableLogging: true,
     });
@@ -48,7 +48,7 @@ describe('Token Usage Tracking Integration', () => {
     expect(response.tokenUsage?.totalTokens).toBeGreaterThan(0);
     expect(response.tokenUsage?.totalTokens).toBe(
       response.tokenUsage?.promptTokens! +
-        response.tokenUsage?.completionTokens!
+      response.tokenUsage?.completionTokens!
     );
   });
 

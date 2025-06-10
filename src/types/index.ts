@@ -50,8 +50,8 @@ export {
 export type AgentOperationalMode =
   | 'human-in-the-loop'
   | 'autonomous'
-  | 'directExecution' // @deprecated Use 'autonomous' instead
-  | 'provideBytes'; // @deprecated Use 'human-in-the-loop' instead
+// | 'directExecution' // @deprecated Use 'autonomous' instead
+// | 'provideBytes'; // @deprecated Use 'human-in-the-loop' instead
 
 export type HederaNetworkType = 'mainnet' | 'testnet';
 

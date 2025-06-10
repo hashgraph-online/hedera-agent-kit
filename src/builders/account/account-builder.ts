@@ -214,6 +214,7 @@ export class AccountBuilder extends BaseServiceBuilder {
     if (
       isUserInitiated &&
       this.kit.userAccountId &&
+      // @ts-ignore - provideBytes is deprecated
       (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop') &&
       params.transfers.length === 1
     ) {

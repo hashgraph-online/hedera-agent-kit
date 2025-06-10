@@ -103,6 +103,7 @@ function mapToSdkCustomFees(
     if (
       !feeCollectorStringToParse &&
       kitUserAccountId &&
+      // @ts-ignore - provideBytes is deprecated
       (kitOperationalMode === 'provideBytes' || kitOperationalMode === 'human-in-the-loop')
     ) {
       feeCollectorStringToParse = kitUserAccountId;
@@ -212,6 +213,7 @@ function mapToSdkCustomFees(
           if (
             !fallbackFeeCollectorStringToParse &&
             kitUserAccountId &&
+            // @ts-ignore - provideBytes is deprecated
             (kitOperationalMode === 'provideBytes' || kitOperationalMode === 'human-in-the-loop')
           ) {
             fallbackFeeCollectorStringToParse = kitUserAccountId;
@@ -297,6 +299,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (
       !treasuryAccId &&
       this.kit.userAccountId &&
+      // @ts-ignore - provideBytes is deprecated
       (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop')
     ) {
       this.logger.info(
@@ -430,6 +433,7 @@ export class HtsBuilder extends BaseServiceBuilder {
     if (
       !treasuryAccId &&
       this.kit.userAccountId &&
+      // @ts-ignore - provideBytes is deprecated
       (this.kit.operationalMode === 'provideBytes' || this.kit.operationalMode === 'human-in-the-loop')
     ) {
       this.logger.info(

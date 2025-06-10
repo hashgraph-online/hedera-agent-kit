@@ -201,9 +201,8 @@ describe('MCP Client Integration Tests', () => {
         const privateKey = signer.getOperatorPrivateKey();
         const publicKey = privateKey.publicKey;
 
-        const messageToSign = `${
-          challenge.challenge
-        }_${testAccountId}_${Date.now()}`;
+        const messageToSign = `${challenge.challenge
+          }_${testAccountId}_${Date.now()}`;
         const messageBytes = Buffer.from(messageToSign, 'utf8');
         const signature = privateKey.sign(messageBytes);
 
@@ -341,7 +340,7 @@ describe('MCP Client Integration Tests', () => {
   describe('Core MCP Tools', () => {
     it('should check server health', async () => {
       const health = await client.healthCheck();
-      
+
       expect(health).toBeDefined();
       expect(health).toHaveProperty('status');
       expect(health).toHaveProperty('timestamp');
@@ -355,7 +354,7 @@ describe('MCP Client Integration Tests', () => {
 
     it('should get server info', async () => {
       const info = await client.getServerInfo();
-      
+
       expect(info).toBeDefined();
       expect(info).toHaveProperty('name');
       expect(info).toHaveProperty('version');
@@ -376,14 +375,14 @@ describe('MCP Client Integration Tests', () => {
             receiverSigRequired: false
           }
         });
-        
+
         expect(result).toBeDefined();
         expect(result).toHaveProperty('operation');
         expect(result).toHaveProperty('mode');
         expect(result).toHaveProperty('status');
         expect(result).toHaveProperty('message');
         expect(result.operation).toBe('generate_transaction_bytes');
-        expect(result.mode).toBe('provideBytes');
+        expect(result.mode).toBe('human-in-the-loop');
       } catch (error) {
         // May require auth or specific setup
         expect(error).toBeDefined();
@@ -398,7 +397,7 @@ describe('MCP Client Integration Tests', () => {
             accountId: testAccountId
           }
         });
-        
+
         expect(result).toBeDefined();
       } catch (error) {
         // May require auth or specific setup
@@ -409,7 +408,7 @@ describe('MCP Client Integration Tests', () => {
     it('should refresh profile', async () => {
       try {
         const result = await client.refreshProfile();
-        
+
         expect(result).toBeDefined();
         expect(result).toHaveProperty('success');
         expect(result).toHaveProperty('message');
