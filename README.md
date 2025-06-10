@@ -125,7 +125,6 @@ npm run demo:hitl           # Human-in-the-loop mode (user signs)
 - [hedera-agent-kit]
   - [Key Features](#key-features)
   - [Table of Contents](#table-of-contents)
-  - [Quick Start: Your First Conversational Hedera Agent](#quick-start-your-first-conversational-hedera-agent)
   - [Core Concepts](#core-concepts)
   - [Handling User Prompts](#handling-user-prompts)
     - [Processing User Prompts](#processing-user-prompts)
@@ -159,54 +158,6 @@ npm run demo:hitl           # Human-in-the-loop mode (user signs)
   - [License](#license)
 
 
-
-_
-
-
-**3. Example Interaction:**
-
-```
-User > Schedule a transfer of 0.1 HBAR from my account to 0.0.34567
-Agent > Okay, I have scheduled a transfer of 0.1 HBAR from your account (0.0.USER_ACCOUNT_ID) to 0.0.34567. The Schedule ID is 0.0.xxxxxx.
-Agent > Transaction bytes received. Do you want to sign and execute this with YOUR account 0.0.USER_ACCOUNT_ID? (y/n): y
-Agent > Transaction executed with your key. Receipt: { ... }
-```
-
-**4. Demo Source Reference:**
-
-The human-in-the-loop demo code is in `examples/human-in-the-loop-demo.ts`. Here is a simplified excerpt:
-
-```typescript
-import * as dotenv from 'dotenv';
-dotenv.config();
-import { ServerSigner } from '@hashgraphonline/hedera-agent-kit';
-import { HederaConversationalAgent } from '@hashgraphonline/hedera-agent-kit';
-
-async function main() {
-  const operatorId = process.env.HEDERA_ACCOUNT_ID;
-  const operatorKey = process.env.HEDERA_PRIVATE_KEY;
-  const network = process.env.HEDERA_NETWORK || 'testnet';
-  const openaiApiKey = process.env.OPENAI_API_KEY;
-  const userAccountId = process.env.USER_ACCOUNT_ID;
-  const userPrivateKey = process.env.USER_PRIVATE_KEY;
-
-  if (!operatorId || !operatorKey)
-    throw new Error(
-      'HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY must be set in .env'
-    );
-
-  const agentSigner = new ServerSigner(operatorId, operatorKey, network);
-  const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'human-in-the-loop',
-    userAccountId: userAccountId,
-    verbose: false,
-    openAIApiKey: openaiApiKey,
-  });
-  await conversationalAgent.initialize();
-  // ... (see examples/langchain-demo.ts for full interactive loop)
-}
-main().catch(console.error);
-```
 
 ## Core Concepts
 
@@ -275,7 +226,7 @@ const agent = new HederaConversationalAgent(agentSigner, {
 
 ## Handling User Prompts
 
-When building applications with `HederaConversationalAgent`, it's important to establish a proper flow for handling user prompts and agent responses. This section explains how to process user inputs, manage conversation history, and handle the various response types from the agent.
+This section establishes how to process user inputs, manage conversation history, and handle various response types with the Hedera Agent Kit.
 
 ### Processing User Prompts
 
@@ -861,35 +812,6 @@ graph TD;
         Signer -- "Uses SDK Client" --> HederaNetwork["Hedera Network"];
         UserWallet -- "Submits to" --> HederaNetwork;
     end
-```
-
-## Local Development
-
-1. **Clone** the repo:
-
-```bash
-git clone https://github.com/hedera-dev/hedera-agent-kit.git
-```
-
-2. Install dependencies:
-
-```bash
-cd hedera-agent-kit
-npm install
-```
-
-3. Configure environment variables (e.g., `OPENAI_API_KEY`, `HEDERA_ACCOUNT_ID`, `HEDERA_PRIVATE_KEY`) in a `.env` file based on the `sample.env` template.
-
-4. Test the kit:
-
-```bash
-npm run test
-```
-
-5. Run the demo:
-
-```bash
-npm run demo:langchain
 ```
 
 ## Related Projects and Advanced Patterns
