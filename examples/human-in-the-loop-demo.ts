@@ -19,7 +19,6 @@ import {
   AgentResponse,
 } from '../src/agent/conversational-agent';
 import { HelloWorldPlugin } from './hello-world-plugin';
-import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
 import { IPlugin } from '@hashgraphonline/standards-agent-kit';
 import { NetworkType } from '../../standards-sdk/src';
 import chalk from 'chalk';
@@ -45,17 +44,17 @@ async function main() {
 
   const banner = `
 ${hederaGradient(
-  '╔═══════════════════════════════════════════════════════════════╗'
-)}
+    '╔═══════════════════════════════════════════════════════════════╗'
+  )}
 ${hederaGradient(
-  '║                      HEDERA AGENT KIT                        ║'
-)}
+    '║                      HEDERA AGENT KIT                        ║'
+  )}
 ${hederaGradient(
-  '║                   Interactive LangChain Demo                 ║'
-)}
+    '║                  Human-in-the-Loop Demo                      ║'
+  )}
 ${hederaGradient(
-  '╚═══════════════════════════════════════════════════════════════╝'
-)}
+    '╚═══════════════════════════════════════════════════════════════╝'
+  )}
 `;
 
   console.log(banner);
@@ -214,9 +213,8 @@ ${hederaGradient(
       console.log(`${primaryGreen('Agent >')} ${primaryGreen(successMsg)}`);
       chatHistory.push({ type: 'ai', content: successMsg });
     } catch (e: any) {
-      const errorMsg = `Sorry, I encountered an error executing that with your key: ${
-        e.message || String(e)
-      }`;
+      const errorMsg = `Sorry, I encountered an error executing that with your key: ${e.message || String(e)
+        }`;
       console.error(
         `${errorColor('Agent >')} ${charcoal.dim(
           'Error executing transaction with user key:'
@@ -337,7 +335,7 @@ ${hederaGradient(
           rl.close();
           console.log(
             `\n${hederaGradient(
-              '🎉 Interactive demo finished. Thank you for using Hedera Agent Kit!'
+              '🎉 Human-in-the-loop demo finished. Thank you for using Hedera Agent Kit!'
             )}`
           );
           return;

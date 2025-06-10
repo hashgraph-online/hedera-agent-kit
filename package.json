@@ -24,7 +24,8 @@
     "README.md"
   ],
   "scripts": {
-    "demo:langchain": "tsx examples/langchain-demo.ts",
+    "demo:hitl": "tsx examples/human-in-the-loop-demo.ts",
+    "demo:auto": "tsx examples/autonomous-demo.ts",
     "demo:notes": "tsx examples/test-notes-system.ts",
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",

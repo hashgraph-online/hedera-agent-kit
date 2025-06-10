@@ -87,9 +87,16 @@ USER_PRIVATE_KEY="your_user_private_key"
 
 **2. Run the interactive demo:**
 
+For human-in-the-loop workflow (user signs transactions):
 ```bash
 npm install
-npm run demo:langchain
+npm run demo:hitl
+```
+
+For autonomous agent workflow (agent executes transactions directly):
+```bash
+npm install
+npm run demo:auto
 ```
 
 **3. Example Interaction:**
@@ -103,7 +110,7 @@ Agent > Transaction executed with your key. Receipt: { ... }
 
 **4. Demo Source Reference:**
 
-The demo code is in `examples/langchain-demo.ts`. Here is a simplified excerpt:
+The human-in-the-loop demo code is in `examples/human-in-the-loop-demo.ts`. Here is a simplified excerpt:
 
 ```typescript
 import * as dotenv from 'dotenv';
@@ -152,6 +159,49 @@ Understanding these concepts will help you make the most of the Hedera Agent Kit
   - `scheduleUserTransactionsInBytesMode: boolean` (Default: `true`): When `operationalMode` is `'provideBytes'`, this flag makes the agent automatically schedule transactions initiated by the user (e.g., "transfer _my_ HBAR..."). The agent's operator account pays to _create the schedule entity_, and the user pays for the _actual scheduled transaction_ when they sign the `ScheduleSignTransaction`.
   - `metaOptions: { schedule: true }`: Allows the LLM to explicitly request scheduling for any tool call, overriding defaults.
 - **Human-in-the-Loop Flow**: The Quick Start example demonstrates this. The agent first creates a schedule (agent pays). Then, after user confirmation, it prepares a `ScheduleSignTransaction` (user pays to sign and submit this, triggering the original scheduled transaction).
+
+### Choosing Between Operational Modes
+
+**Autonomous Agent Mode** (`operationalMode: 'directExecution'`)
+- Best for: Backend services, autonomous agents, testing and development
+- The agent's account signs and pays for all transactions
+- Simpler implementation - no user interaction needed
+- Try the demo: `npm run demo:auto`
+- Example use cases: 
+  - Automated trading bots
+  - System maintenance tasks
+  - Development/testing environments
+
+```typescript
+const agent = new HederaConversationalAgent(agentSigner, {
+  operationalMode: 'directExecution',
+  openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+// User says: "Send 10 HBAR to 0.0.12345"
+// Agent directly executes the transfer using its own account
+```
+
+**Human-in-the-Loop Mode** (`operationalMode: 'provideBytes'`)
+- Best for: User-facing applications, wallets, dApps
+- Agent prepares transactions, users sign with their own accounts
+- Maintains user custody of keys and funds
+- Try the demo: `npm run demo:hitl`
+- Example use cases:
+  - Chat interfaces for wallet apps
+  - DeFi application assistants
+  - Any scenario where users should control their own funds
+
+```typescript
+const agent = new HederaConversationalAgent(agentSigner, {
+  operationalMode: 'provideBytes',
+  userAccountId: userAccountId,
+  openAIApiKey: process.env.OPENAI_API_KEY,
+});
+
+// User says: "Send 10 HBAR from my account to 0.0.12345"
+// Agent returns transaction bytes for the user to sign
+```
 
 ## Handling User Prompts
 
@@ -510,6 +560,7 @@ The Hedera Agent Kit provides a comprehensive set of tools organized by service 
 | `hedera-revoke-hbar-allowance`                  | Revokes an HBAR allowance                          | Remove permission for an account to spend your HBAR       |
 | `hedera-revoke-fungible-token-allowance`        | Revokes a fungible token allowance                 | Remove permission for an account to spend your tokens     |
 | `hedera-sign-and-execute-scheduled-transaction` | Signs and executes a scheduled transaction         | User signs a transaction prepared by the agent            |
+
 
 ### HBAR Transaction Tools
 
