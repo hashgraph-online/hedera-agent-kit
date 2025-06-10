@@ -65,7 +65,7 @@ export class HederaAgentKit {
   constructor(
     signer: AbstractSigner,
     pluginConfigInput?: PluginConfig | undefined,
-    initialOperationalMode: AgentOperationalMode = 'provideBytes',
+    initialOperationalMode: AgentOperationalMode = 'human-in-the-loop',
     userAccountId?: string,
     scheduleUserTransactionsInBytesMode: boolean = true,
     modelCapability: ModelCapability = ModelCapability.MEDIUM,

@@ -47,7 +47,7 @@ export {
   ScheduleId,
 };
 
-export type AgentOperationalMode = 'directExecution' | 'provideBytes';
+export type AgentOperationalMode = 'human-in-the-loop' | 'autonomous' | 'directExecution' | 'provideBytes';
 export type HederaNetworkType = 'mainnet' | 'testnet';
 
 /**
