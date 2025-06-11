@@ -6,6 +6,19 @@
 
 > Build Hedera-powered AI agents **in under a minute**.
 
+## 📋 Contents
+
+- [🚀 60-Second Quick-Start](#-60-second-quick-start)
+- [✨ Key Features](#-key-features)
+- [🧠 Core Concepts](#-core-concepts)
+- [💬 Handling Conversations](#-handling-conversations)
+- [🔧 Advanced Usage](#-advanced-usage)
+- [🛠️ Available Tools](#️-available-tools)
+- [🗺 Architecture Diagram](#-architecture-diagram)
+- [🌐 Related Projects & Patterns](#-related-projects--patterns)
+- [🧑‍💻 Local Development & Contributing](#-local-development--contributing)
+- [📜 License](#-license)
+
 ---
 
 ## 🚀 60-Second Quick-Start
