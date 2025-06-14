@@ -1,5 +1,5 @@
-import { StructuredTool } from '@langchain/core/tools';
 import HederaAgentKit from '../agent/agent';
+import { HederaTool } from '../plugins/PluginInterface';
 import * as dotenv from 'dotenv';
 import { PrivateKey } from '@hashgraph/sdk';
 import { HederaCreateTopicTool } from './tools/hcs/create-topic-tool';
@@ -89,7 +89,7 @@ export async function createHederaTools(
   operatorId?: string,
   operatorKey?: PrivateKey,
   modelCapability: ModelCapability = ModelCapability.MEDIUM
-): Promise<StructuredTool[]> {
+): Promise<HederaTool[]> {
   const toolParams: BaseHederaTransactionToolParams = {
     hederaKit,
     logger: hederaKit.logger,
@@ -101,7 +101,7 @@ export async function createHederaTools(
     modelCapability,
   };
 
-  const hederaTools: StructuredTool[] = [
+  const hederaTools: HederaTool[] = [
     new HederaTransferHbarTool(toolParams),
     new HederaApproveFungibleTokenAllowanceTool(toolParams),
     new HederaApproveHbarAllowanceTool(toolParams),
@@ -149,26 +149,26 @@ export async function createHederaTools(
     new HederaUpdateContractTool(toolParams),
     new HederaDeleteContractTool(toolParams),
     new HederaExecuteContractTool(toolParams),
-    new HederaGetTopicInfoTool(queryToolParams) as StructuredTool,
-    new HederaGetTopicFeesTool(queryToolParams) as StructuredTool,
-    new HederaGetTopicMessages(queryToolParams) as StructuredTool,
-    new HederaGetAccountBalanceTool(queryToolParams) as StructuredTool,
-    new HederaGetAccountPublicKeyTool(queryToolParams) as StructuredTool,
-    new HederaGetAccountInfoTool(queryToolParams) as StructuredTool,
-    new HederaGetAccountTokensTool(queryToolParams) as StructuredTool,
-    new HederaGetAccountNftsTool(queryToolParams) as StructuredTool,
-    new HederaGetOutstandingAirdropsTool(queryToolParams) as StructuredTool,
-    new HederaGetPendingAirdropsTool(queryToolParams) as StructuredTool,
-    new HederaGetTokenInfoTool(queryToolParams) as StructuredTool,
-    new HederaValidateNftOwnershipTool(queryToolParams) as StructuredTool,
-    new HederaGetHbarPriceTool(queryToolParams) as StructuredTool,
-    new HederaGetTransactionTool(queryToolParams) as StructuredTool,
-    new HederaGetBlocksTool(queryToolParams) as StructuredTool,
-    new HederaGetContractsTool(queryToolParams) as StructuredTool,
-    new HederaGetContractTool(queryToolParams) as StructuredTool,
-    new HederaGetNetworkInfoTool(queryToolParams) as StructuredTool,
-    new HederaGetNetworkFeesTool(queryToolParams) as StructuredTool,
-    new HederaGetFileContentsTool(queryToolParams) as StructuredTool,
+    new HederaGetTopicInfoTool(queryToolParams),
+    new HederaGetTopicFeesTool(queryToolParams),
+    new HederaGetTopicMessages(queryToolParams),
+    new HederaGetAccountBalanceTool(queryToolParams),
+    new HederaGetAccountPublicKeyTool(queryToolParams),
+    new HederaGetAccountInfoTool(queryToolParams),
+    new HederaGetAccountTokensTool(queryToolParams),
+    new HederaGetAccountNftsTool(queryToolParams),
+    new HederaGetOutstandingAirdropsTool(queryToolParams),
+    new HederaGetPendingAirdropsTool(queryToolParams),
+    new HederaGetTokenInfoTool(queryToolParams),
+    new HederaValidateNftOwnershipTool(queryToolParams),
+    new HederaGetHbarPriceTool(queryToolParams),
+    new HederaGetTransactionTool(queryToolParams),
+    new HederaGetBlocksTool(queryToolParams),
+    new HederaGetContractsTool(queryToolParams),
+    new HederaGetContractTool(queryToolParams),
+    new HederaGetNetworkInfoTool(queryToolParams),
+    new HederaGetNetworkFeesTool(queryToolParams),
+    new HederaGetFileContentsTool(queryToolParams),
   ];
 
   hederaKit.logger.info(
@@ -243,3 +243,5 @@ export { HederaExecuteContractTool } from './tools/scs/execute-contract-tool';
 
 export { HederaGetHbarPriceTool } from './tools/network/get-hbar-price-tool';
 export { HederaGetTransactionTool } from './tools/transaction/get-transaction-tool';
+
+export * from './tools/hcs10';

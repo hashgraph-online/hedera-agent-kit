@@ -57,7 +57,7 @@ export interface AgentResponse {
   rawToolOutput?: unknown;
   tokenUsage?: TokenUsage | undefined;
   cost?: CostCalculation | undefined;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -262,8 +262,7 @@ export class HederaConversationalAgent {
 
     await this.hederaKit.initialize();
     this.systemMessage = this.constructSystemMessage();
-    let toolsFromKit =
-      this.hederaKit.getAggregatedLangChainTools() as StructuredTool[];
+    let toolsFromKit = this.hederaKit.getAggregatedLangChainTools();
 
     if (this.config.toolFilter) {
       const originalCount = toolsFromKit.length;
@@ -294,12 +293,12 @@ export class HederaConversationalAgent {
     ]);
     const agent = await createOpenAIToolsAgent({
       llm: this.llm,
-      tools: toolsFromKit as StructuredTool[],
+      tools: toolsFromKit as unknown as StructuredTool[],
       prompt,
     });
     this.agentExecutor = new AgentExecutor({
       agent,
-      tools: toolsFromKit as StructuredTool[],
+      tools: toolsFromKit as unknown as StructuredTool[],
       verbose: this.config.verbose ?? false,
       returnIntermediateSteps: true,
     });

@@ -1,6 +1,6 @@
 {
   "name": "@hashgraphonline/hedera-agent-kit",
-  "version": "0.0.38",
+  "version": "0.0.40",
   "type": "module",
   "main": "./dist/cjs/index.cjs",
   "module": "./dist/esm/index.js",
@@ -24,7 +24,8 @@
     "README.md"
   ],
   "scripts": {
-    "demo:langchain": "tsx examples/langchain-demo.ts",
+    "demo:auto": "tsx examples/langchain-demo.ts directExecution",
+    "demo:human": "tsx examples/langchain-demo.ts provideBytes",
     "demo:notes": "tsx examples/test-notes-system.ts",
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",
@@ -45,7 +46,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "description": "",
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -66,10 +67,8 @@
     "vitest": "^3.0.7"
   },
   "dependencies": {
-    "@hashgraph/sdk": "^2.65.1",
-    "@hashgraphonline/hashinal-wc": "^1.0.96",
-    "@hashgraphonline/standards-agent-kit": "^0.0.37",
-    "@hashgraphonline/standards-sdk": "^0.0.121",
+    "@hashgraph/sdk": "^2.66.0",
+    "@hashgraphonline/standards-sdk": "^0.0.137",
     "@langchain/core": "^0.3.55",
     "@langchain/langgraph": "^0.2.71",
     "@langchain/openai": "^0.5.11",

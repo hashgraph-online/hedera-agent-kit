@@ -98,6 +98,12 @@ export abstract class BaseHederaTransactionTool<
   protected logger: StandardsSdkLogger;
   protected neverScheduleThisTool: boolean = false;
 
+  /**
+   * Indicates if this tool requires multiple transactions to complete.
+   * Tools that require multiple transactions cannot be used in provideBytes mode.
+   */
+  protected requiresMultipleTransactions: boolean = false;
+
   abstract specificInputSchema: S;
   abstract namespace: string;
 
@@ -158,13 +164,16 @@ export abstract class BaseHederaTransactionTool<
     ];
 
     for (const keyField of keyFieldNames) {
-      const originalKeyValue = (specificCallArgs as any)[keyField];
+      const originalKeyValue = (specificCallArgs as Record<string, unknown>)[
+        keyField as string
+      ];
 
       if (originalKeyValue === 'current_signer') {
         try {
           const operatorPubKey = await this.hederaKit.signer.getPublicKey();
           const pubKeyString = operatorPubKey.toStringDer();
-          (specificCallArgs as any)[keyField] = pubKeyString;
+          (specificCallArgs as Record<string, unknown>)[keyField as string] =
+            pubKeyString;
           this.logger.info(
             `Substituted ${
               keyField as string
@@ -249,6 +258,19 @@ export abstract class BaseHederaTransactionTool<
     metaOpts: HederaTransactionMetaOptions | undefined,
     allNotes: string[]
   ): Promise<string> {
+    if (this.requiresMultipleTransactions) {
+      const errorMessage =
+        `The ${this.name} tool requires multiple transactions and cannot be used in provideBytes mode. ` +
+        `Please use directExecution mode or break down the operation into individual steps.`;
+      this.logger.warn(errorMessage);
+      return JSON.stringify({
+        success: false,
+        error: errorMessage,
+        requiresDirectExecution: true,
+        notes: allNotes,
+      });
+    }
+
     const shouldSchedule = this._shouldScheduleTransaction(metaOpts);
 
     if (shouldSchedule) {
@@ -429,9 +451,12 @@ export abstract class BaseHederaTransactionTool<
 
           if (
             fieldSchema._def &&
-            (fieldSchema._def as any).typeName === 'ZodDefault'
+            (fieldSchema._def as z.ZodDefaultDef<z.ZodTypeAny>).typeName ===
+              'ZodDefault'
           ) {
-            const defaultValueOrFn = (fieldSchema._def as any).defaultValue;
+            const defaultValueOrFn = (
+              fieldSchema._def as z.ZodDefaultDef<z.ZodTypeAny>
+            ).defaultValue();
             let schemaDefinedDefaultValue = defaultValueOrFn;
             if (typeof defaultValueOrFn === 'function') {
               try {
@@ -516,11 +541,11 @@ export abstract class BaseHederaTransactionTool<
   private _extractSpecificArgsFromCombinedArgs(
     combinedArgs: z.infer<ReturnType<this['schema']>>
   ): z.infer<S> {
-    const specificArgs: Record<string, any> = {};
+    const specificArgs: Record<string, unknown> = {};
     if (this.specificInputSchema && this.specificInputSchema.shape) {
       for (const key in this.specificInputSchema.shape) {
         if (Object.prototype.hasOwnProperty.call(combinedArgs, key)) {
-          specificArgs[key] = (combinedArgs as any)[key];
+          specificArgs[key] = (combinedArgs as Record<string, unknown>)[key];
         }
       }
     }
