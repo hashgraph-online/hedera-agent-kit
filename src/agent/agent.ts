@@ -15,23 +15,20 @@ import {
   MirrorNodeConfig,
 } from '../types';
 import { HederaMirrorNode, Logger } from '@hashgraphonline/standards-sdk';
-import {
-  IPlugin,
-  GenericPluginContext,
-  OpenConvaiState,
-  HCS10Client,
-} from '@hashgraphonline/standards-agent-kit';
-import { Tool } from '@langchain/core/tools';
+import type { IPlugin, GenericPluginContext, HederaTool } from '../plugins';
+import { OpenConvAIPlugin } from '../plugins';
+import { IStateManager, OpenConvaiState } from '../state';
 import { HcsBuilder } from '../builders/hcs/hcs-builder';
 import { HtsBuilder } from '../builders/hts/hts-builder';
 import { AccountBuilder } from '../builders/account/account-builder';
 import { ScsBuilder } from '../builders/scs/scs-builder';
 import { FileBuilder } from '../builders/file/file-builder';
 import { QueryBuilder } from '../builders/query/query-builder';
+import { HCS10Builder } from '../builders/hcs10/hcs10-builder';
+import { LogLevel } from '@hashgraphonline/standards-sdk';
 import { ExecuteResult } from '../builders/base-service-builder';
 import { createHederaTools } from '../langchain';
 import { ModelCapability } from '../types/model-capability';
-import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
 
 export interface PluginConfig {
   plugins?: IPlugin[];
@@ -52,9 +49,10 @@ export class HederaAgentKit {
   public readonly signer: AbstractSigner;
   public readonly mirrorNode: HederaMirrorNode;
   private loadedPlugins: IPlugin[];
-  private aggregatedTools: Tool[];
+  private aggregatedTools: HederaTool[];
   private pluginConfigInternal?: PluginConfig | undefined;
   private isInitialized: boolean = false;
+  private openConvAIPlugin?: OpenConvAIPlugin;
   public readonly logger: Logger;
   public operationalMode: AgentOperationalMode;
   public userAccountId?: string | undefined;
@@ -100,7 +98,7 @@ export class HederaAgentKit {
     this.mirrorNode = new HederaMirrorNode(
       this.network,
       new Logger({
-        level: shouldDisableLogs ? ('silent' as any) : 'info',
+        level: shouldDisableLogs ? 'silent' : 'info',
         module: 'HederaAgentKit-MirrorNode',
         silent: shouldDisableLogs,
       }),
@@ -131,8 +129,11 @@ export class HederaAgentKit {
     this.loadedPlugins = [];
 
     const contextForPlugins: GenericPluginContext = {
-      logger: this.logger as any,
-      config: this.pluginConfigInternal?.appConfig || {},
+      logger: this.logger,
+      config: {
+        ...(this.pluginConfigInternal?.appConfig || {}),
+        hederaKit: this,
+      },
       client: {
         getNetwork: () => this.network,
       },
@@ -167,28 +168,29 @@ export class HederaAgentKit {
       signerPrivateKey,
       this.modelCapability
     );
-    const pluginTools: Tool[] = this.loadedPlugins.flatMap((plugin) => {
+    const pluginTools: HederaTool[] = this.loadedPlugins.flatMap((plugin) => {
       return plugin.getTools();
-    }) as unknown as Tool[];
-    const openConvAIPlugin = new OpenConvAIPlugin();
-    await openConvAIPlugin.initialize({
+    });
+
+    this.openConvAIPlugin = new OpenConvAIPlugin(
+      this.signer.getAccountId().toString(),
+      this.signer.getOperatorPrivateKey()?.toStringRaw()
+    );
+    await this.openConvAIPlugin.initialize({
       logger: this.logger,
-      config: this.pluginConfigInternal?.appConfig || {},
-      client: new HCS10Client(
-        this.signer.getAccountId().toString(),
-        this.signer.getOperatorPrivateKey()?.toStringRaw(),
-        this.network,
-      ),
+      config: {
+        ...(this.pluginConfigInternal?.appConfig || {}),
+        hederaKit: this,
+      },
+      client: {
+        getNetwork: () => this.network,
+      },
       stateManager: new OpenConvaiState(),
     });
 
-    const hcs10Tools = openConvAIPlugin.getTools();
+    const hcs10Tools = this.openConvAIPlugin.getTools();
 
-    this.aggregatedTools = [
-      ...coreKitTools,
-      ...pluginTools,
-      ...hcs10Tools,
-    ] as unknown as Tool[];
+    this.aggregatedTools = [...coreKitTools, ...pluginTools, ...hcs10Tools];
 
     this.isInitialized = true;
     this.logger.info(
@@ -209,13 +211,25 @@ export class HederaAgentKit {
    * @returns {Tool[]} An array of LangChain Tool objects.
    * @throws {Error} If the kit has not been initialized.
    */
-  public getAggregatedLangChainTools(): Tool[] {
+  public getAggregatedLangChainTools(): HederaTool[] {
     if (!this.isInitialized) {
       throw new Error(
         'HederaAgentKit not initialized. Call await kit.initialize() before accessing tools.'
       );
     }
     return this.aggregatedTools;
+  }
+
+  /**
+   * Retrieves the state manager from the OpenConvAI plugin.
+   * @returns {IStateManager | undefined} The state manager instance or undefined if not available.
+   * @throws {Error} If the kit has not been initialized.
+   */
+  public getStateManager(): IStateManager | undefined {
+    if (!this.isInitialized) {
+      throw new Error(NOT_INITIALIZED_ERROR);
+    }
+    return this.openConvAIPlugin?.getStateManager();
   }
 
   /**
@@ -288,6 +302,34 @@ export class HederaAgentKit {
       throw new Error(NOT_INITIALIZED_ERROR);
     }
     return new QueryBuilder(this);
+  }
+
+  /**
+   * Provides access to the HCS-10 protocol builder for agent communication.
+   * @returns {HCS10Builder} An instance of HCS10Builder.
+   * @throws {Error} If HederaAgentKit has not been initialized via `await initialize()`.
+   */
+  public hcs10(): HCS10Builder {
+    if (!this.isInitialized) {
+      throw new Error(NOT_INITIALIZED_ERROR);
+    }
+    if (!this.openConvAIPlugin) {
+      throw new Error(
+        'HCS-10 functionality requires OpenConvAI plugin to be initialized.'
+      );
+    }
+    const stateManager = this.openConvAIPlugin.getStateManager();
+    const registryUrl = this.pluginConfigInternal?.appConfig?.registryUrl as
+      | string
+      | undefined;
+    const logLevel = this.pluginConfigInternal?.appConfig?.logLevel as
+      | LogLevel
+      | undefined;
+
+    return new HCS10Builder(this, stateManager, {
+      ...(Boolean(registryUrl) && { registryUrl: registryUrl as string }),
+      ...(Boolean(logLevel) && { logLevel: logLevel as LogLevel }),
+    });
   }
 
   /**

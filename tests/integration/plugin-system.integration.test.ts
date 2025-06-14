@@ -2,10 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { HederaAgentKit, PluginConfig } from '../../src/agent';
 import { HederaConversationalAgent } from '../../src/agent/conversational-agent';
 import { ServerSigner } from '../../src/signer/server-signer';
-import {
-  GenericPlugin,
-  GenericPluginContext,
-} from '@hashgraphonline/standards-agent-kit';
+import { GenericPlugin } from '../../src/plugins';
+import type { GenericPluginContext } from '../../src/plugins';
 import { StructuredTool, DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import dotenv from 'dotenv';

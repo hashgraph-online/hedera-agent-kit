@@ -19,8 +19,7 @@ import {
   AgentResponse,
 } from '../src/agent/conversational-agent';
 import { HelloWorldPlugin } from './hello-world-plugin';
-import { OpenConvAIPlugin } from '@hashgraphonline/standards-agent-kit';
-import { IPlugin } from '@hashgraphonline/standards-agent-kit';
+import type { IPlugin } from '../src/plugins';
 import { NetworkType } from '../../standards-sdk/src';
 import chalk from 'chalk';
 import gradient from 'gradient-string';
@@ -43,6 +42,23 @@ async function main() {
   const primaryGreen = chalk.hex('#3ec878').bold;
   const charcoal = chalk.hex('#464646');
 
+  const args = process.argv.slice(2);
+  const mode = args[0] || 'provideBytes';
+
+  if (!['provideBytes', 'directExecution'].includes(mode)) {
+    console.error(
+      errorColor(
+        `Invalid mode: ${mode}. Use 'provideBytes' or 'directExecution'.`
+      )
+    );
+    process.exit(1);
+  }
+
+  const isAutonomous = mode === 'directExecution';
+  const modeDescription = isAutonomous
+    ? 'Autonomous Mode'
+    : 'Human-in-the-Loop Mode';
+
   const banner = `
 ${hederaGradient(
   '╔═══════════════════════════════════════════════════════════════╗'
@@ -50,9 +66,7 @@ ${hederaGradient(
 ${hederaGradient(
   '║                      HEDERA AGENT KIT                        ║'
 )}
-${hederaGradient(
-  '║                   Interactive LangChain Demo                 ║'
-)}
+${hederaGradient(`║                   ${modeDescription.padEnd(30)} ║`)}
 ${hederaGradient(
   '╚═══════════════════════════════════════════════════════════════╝'
 )}
@@ -60,6 +74,7 @@ ${hederaGradient(
 
   console.log(banner);
   console.log(primaryGreen('🚀 Initializing Hedera Agent Kit...\n'));
+  console.log(primaryBlue(`🔧 Operational Mode: ${chalk.white(mode)}\n`));
 
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
   const operatorKey = process.env.HEDERA_PRIVATE_KEY;
@@ -81,7 +96,7 @@ ${hederaGradient(
   const agentSigner = new ServerSigner(operatorId, operatorKey, network);
 
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
-    operationalMode: 'provideBytes',
+    operationalMode: mode as 'provideBytes' | 'directExecution',
     userAccountId: userAccountId,
     verbose: false,
     openAIApiKey: openaiApiKey,

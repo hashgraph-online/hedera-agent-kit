@@ -3,10 +3,10 @@
  * @description Defines a simple Logger interface for the HederaAgentKit.
  */
 export interface Logger {
-  debug(message: string, ...optionalParams: any[]): void;
-  info(message: string, ...optionalParams: any[]): void;
-  warn(message: string, ...optionalParams: any[]): void;
-  error(message: string, ...optionalParams: any[]): void;
+  debug(message: string, ...optionalParams: unknown[]): void;
+  info(message: string, ...optionalParams: unknown[]): void;
+  warn(message: string, ...optionalParams: unknown[]): void;
+  error(message: string, ...optionalParams: unknown[]): void;
 }
 
 /**
@@ -27,22 +27,21 @@ export class ConsoleLogger implements Logger {
     return ConsoleLogger.instance;
   }
 
-  debug(message: string, ...optionalParams: any[]): void {
+  debug(message: string, ...optionalParams: unknown[]): void {
     console.debug(`${this.prefix} DEBUG: ${message}`, ...optionalParams);
   }
 
-  info(message: string, ...optionalParams: any[]): void {
+  info(message: string, ...optionalParams: unknown[]): void {
     console.info(`${this.prefix} INFO: ${message}`, ...optionalParams);
   }
 
-  warn(message: string, ...optionalParams: any[]): void {
+  warn(message: string, ...optionalParams: unknown[]): void {
     console.warn(`${this.prefix} WARN: ${message}`, ...optionalParams);
   }
 
-  error(message: string, ...optionalParams: any[]): void {
+  error(message: string, ...optionalParams: unknown[]): void {
     console.error(`${this.prefix} ERROR: ${message}`, ...optionalParams);
   }
 }
 
-// Export a default instance
 export const defaultLogger = ConsoleLogger.getInstance(); 

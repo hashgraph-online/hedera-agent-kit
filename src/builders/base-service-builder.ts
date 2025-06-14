@@ -22,7 +22,7 @@ import type { HederaAgentKit } from '../agent/agent';
 export interface ExecuteResult {
   success: boolean;
   receipt?: TransactionReceipt;
-  scheduleId?: ScheduleId | string;
+  scheduleId?: ScheduleId | string | undefined;
   error?: string;
   transactionId?: string | undefined;
 }

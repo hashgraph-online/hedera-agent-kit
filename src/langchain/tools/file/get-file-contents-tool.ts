@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { Tool, ToolParams } from '@langchain/core/tools';
-import { HederaAgentKit } from '../../../agent/agent';
-import { Logger as StandardsSdkLogger } from '@hashgraphonline/standards-sdk';
+import {
+  BaseHederaQueryTool,
+  BaseHederaQueryToolParams,
+} from '../common/base-hedera-query-tool';
 import { FileId, FileContentsQuery } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';
 
@@ -20,51 +21,32 @@ const GetFileContentsZodSchema = z.object({
     ),
 });
 
-export interface HederaGetFileContentsToolParams extends ToolParams {
-  hederaKit: HederaAgentKit;
-  logger?: StandardsSdkLogger;
-}
+export interface HederaGetFileContentsToolParams
+  extends BaseHederaQueryToolParams {}
 
-export class HederaGetFileContentsTool extends Tool {
-  protected hederaKit: HederaAgentKit;
-  protected logger: StandardsSdkLogger;
-
+export class HederaGetFileContentsTool extends BaseHederaQueryTool<
+  typeof GetFileContentsZodSchema
+> {
   name = 'hedera-file-get-contents';
   description =
     'Retrieves the contents of a file from the Hedera File Service. Requires fileId. Returns contents as base64 string by default, or utf8.';
+  specificInputSchema = GetFileContentsZodSchema;
+  namespace = 'file';
 
-  constructor({ hederaKit, logger, ...rest }: HederaGetFileContentsToolParams) {
-    super(rest);
-    this.hederaKit = hederaKit;
-    this.logger = logger || hederaKit.logger;
+  constructor(params: HederaGetFileContentsToolParams) {
+    super(params);
   }
 
-  protected async _call(
-    input: string | z.infer<typeof GetFileContentsZodSchema>
-  ): Promise<string> {
-    let args: z.infer<typeof GetFileContentsZodSchema>;
-    try {
-      if (typeof input === 'string') {
-        try {
-          args = GetFileContentsZodSchema.parse(JSON.parse(input));
-        } catch (e: unknown) {
-          const error = e as Error;
-          throw new Error(
-            `Error parsing input: ${error.message}. Expected JSON string with fileId and optional outputEncoding.`
-          );
-        }
-      } else {
-        args = GetFileContentsZodSchema.parse(input);
-      }
-    } catch (e: unknown) {
-      const error = e as Error;
-      return JSON.stringify({
-        success: false,
-        error: `Invalid input: ${error.message}`,
-      });
-    }
+  protected async executeQuery(
+    args: z.infer<typeof GetFileContentsZodSchema>
+  ): Promise<{
+    fileId: string;
+    contents: string;
+    encoding: string;
+    size: number;
+  }> {
+    this.logger.info(`Getting contents of file: ${args.fileId}`);
 
-    this.logger.info(`Executing ${this.name} with args:`, args);
     try {
       const fileId = FileId.fromString(args.fileId);
       const query = new FileContentsQuery().setFileId(fileId);
@@ -72,31 +54,47 @@ export class HederaGetFileContentsTool extends Tool {
       const contentsBytes: Uint8Array = await query.execute(
         this.hederaKit.client
       );
+      const buffer = Buffer.from(contentsBytes);
 
       let outputContents: string;
       if (args.outputEncoding === 'utf8') {
-        outputContents = Buffer.from(contentsBytes).toString('utf8');
+        outputContents = buffer.toString('utf8');
       } else {
-        outputContents = Buffer.from(contentsBytes).toString('base64');
+        outputContents = buffer.toString('base64');
       }
-      return JSON.stringify({
-        success: true,
-        fileId: args.fileId,
-        encoding: args.outputEncoding,
-        contents: outputContents,
-      });
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Error in ${this.name} for file ${args.fileId}: ${errorMessage}`,
-        error
+
+      this.logger.info(
+        `Successfully retrieved file contents for ${args.fileId} (${
+          buffer.length
+        } bytes, encoded as ${args.outputEncoding || 'base64'})`
       );
-      return JSON.stringify({
-        success: false,
-        error: errorMessage,
+
+      return {
         fileId: args.fileId,
-      });
+        contents: outputContents,
+        encoding: args.outputEncoding || 'base64',
+        size: buffer.length,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to get file contents: ${errorMessage}`);
+      throw new Error(`Failed to get file contents: ${errorMessage}`);
     }
+  }
+
+  protected getFieldProcessingConfig(): Record<
+    string,
+    {
+      maxLength: number;
+      truncateMessage: string;
+    }
+  > {
+    return {
+      contents: {
+        maxLength: 50000,
+        truncateMessage: '... [content truncated due to length]',
+      },
+    };
   }
 }
