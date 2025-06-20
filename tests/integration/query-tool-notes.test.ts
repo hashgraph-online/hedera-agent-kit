@@ -18,7 +18,7 @@ class TestQueryTool extends BaseHederaQueryTool<typeof TestSchema> {
   specificInputSchema = TestSchema;
   namespace = 'test';
 
-  protected async executeQuery(): Promise<any> {
+  protected override async executeQuery(): Promise<unknown> {
     return {
       contract: {
         bytecode: 'a'.repeat(15000),
@@ -40,7 +40,7 @@ class TestQueryTool extends BaseHederaQueryTool<typeof TestSchema> {
     };
   }
 
-  public async testCall(args: any): Promise<string> {
+  public override async testCall(args: z.infer<typeof TestSchema>): Promise<string> {
     return this._call(args);
   }
 }

@@ -5,16 +5,9 @@ import {
   Logger,
   AIAgentCapability,
   HederaMirrorNode,
-  NetworkType,
-  TopicFeeConfig,
-  FeeConfigBuilder,
-  ConnectionsManager,
-  Connection,
-  HCSMessage,
   RegistrationProgressData,
   AgentCreationState,
   MCPServerBuilder,
-  MCPServerCapability,
 } from '@hashgraphonline/standards-sdk';
 import { TransferTransaction, Hbar } from '@hashgraph/sdk';
 import * as fs from 'fs';
@@ -124,7 +117,7 @@ export async function ensureAgentHasEnoughHbar(
           'Failed to get HBAR price from Mirror Node. Please ensure the account has enough HBAR.'
         );
       }
-    } catch (error) {
+    } catch {
       logger.warn(
         'Failed to check USD balance. Please ensure the account has enough HBAR.'
       );
@@ -273,6 +266,7 @@ export async function createAgent(
         ? 'createAndRegisterAgent'
         : 'createAndRegisterMCPServer';
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await baseClient[method](agentBuilder as any, {
       ...options,
       existingState: hasPartialState

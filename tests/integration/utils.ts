@@ -10,6 +10,8 @@ import { ChainValues } from '@langchain/core/utils/types';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+const DEFAULT_MODEL = DEFAULT_MODEL;
+
 /**
  * Initializes HederaAgentKit with a ServerSigner for testing.
  * Reads Hedera Testnet account ID and private key from environment variables.
@@ -32,7 +34,7 @@ export async function initializeTestKit(): Promise<HederaAgentKit> {
 
   const signer = new ServerSigner(accountId, privateKey, 'testnet');
 
-  const kit = new HederaAgentKit(signer, { appConfig: { openAIApiKey } }, 'provideBytes', undefined, true, undefined, 'gpt-4o-mini'); 
+  const kit = new HederaAgentKit(signer, { appConfig: { openAIApiKey } }, 'provideBytes', undefined, true, undefined, DEFAULT_MODEL); 
   await kit.initialize();
   return kit;
 }
@@ -48,7 +50,7 @@ export async function createSimpleTestAgentExecutor(
   
   const llm = new ChatOpenAI({
     apiKey: openAIApiKey,
-    modelName: 'gpt-4o-mini',
+    modelName: DEFAULT_MODEL,
     temperature: 0,
     maxTokens: 500,
   });
@@ -108,7 +110,7 @@ export async function createTestAgentExecutor(
   
   const llm = new ChatOpenAI({
     apiKey: openAIApiKey,
-    modelName: 'gpt-4o-mini',
+    modelName: DEFAULT_MODEL,
     temperature: 0,
     maxTokens: 1000,
   });

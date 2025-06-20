@@ -14,7 +14,7 @@ const FunctionParameterInputSchema = z.object({
       'Parameter type (e.g., string, bytes, bytes32, bool, int8, int32, int64, int256, uint8, uint32, uint64, uint256, address).'
     ),
   value: z
-    .any()
+    .unknown()
     .describe(
       'Parameter value. For bytes/bytes32, use hex string. For address, use "0.0.xxxx" string.'
     ),

@@ -10,6 +10,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
   - **Provide Bytes**: For user-centric apps where users sign with their own wallets (e.g., HashPack via WalletConnect).
   - **Scheduled Transactions**: Built-in support for "human-in-the-loop" workflows, where AI prepares transactions for user review and approval.
 - **Comprehensive Toolset**: Pre-built tools for HTS, HCS, HBAR transfers, account management, files, and smart contracts.
+- **Token Usage Tracking**: Real-time tracking of LLM token usage with accurate cost calculation based on dynamic pricing.
 - **Extensible**: Add your own custom tools with the plugin system.
 - **Simplified SDK Interaction**: Abstracts away much of the Hedera SDK boilerplate.
 
@@ -41,6 +42,7 @@ Build LLM-powered applications that interact with the Hedera Network. Create con
   - [Advanced Usage](#advanced-usage)
     - [Using `HederaAgentKit` Directly](#using-hederaagentkit-directly)
     - [Tool Filtering](#tool-filtering)
+    - [Token Usage Tracking and Cost Calculation](#token-usage-tracking-and-cost-calculation)
     - [Plugin System](#plugin-system)
   - [API Reference](#api-reference)
     - [HederaConversationalAgent Options](#hederaconversationalagent-options)
@@ -710,6 +712,87 @@ async function createRoleBasedAgent(userRole: 'admin' | 'user' | 'viewer') {
   
   await agent.initialize();
   return agent;
+}
+```
+
+### Token Usage Tracking and Cost Calculation
+
+The Hedera Agent Kit now includes comprehensive token usage tracking and cost calculation for OpenAI API calls. This feature enables:
+- Accurate billing based on actual LLM token consumption
+- Real-time cost monitoring
+- Usage history tracking
+- Dynamic pricing from OpenRouter API (300+ models)
+
+```typescript
+import { HederaConversationalAgent, formatCost } from '@hashgraphonline/hedera-agent-kit';
+
+// Initialize agent with token tracking
+const agent = new HederaConversationalAgent(signer, {
+  openAIApiKey: process.env.OPENAI_API_KEY,
+  operationalMode: 'provideBytes',
+});
+
+await agent.initialize();
+
+// Process a message - token usage is automatically tracked
+const response = await agent.processMessage('Create a new token called TestToken');
+
+// Access token usage for this request
+if (response.tokenUsage && response.cost) {
+  console.log(`Tokens used: ${response.tokenUsage.totalTokens}`);
+  console.log(`Cost: ${formatCost(response.cost)}`);
+  console.log(`  - Prompt tokens: ${response.tokenUsage.promptTokens}`);
+  console.log(`  - Completion tokens: ${response.tokenUsage.completionTokens}`);
+}
+
+// Get cumulative usage across all requests
+const totalUsage = agent.getTotalTokenUsage();
+console.log(`Total tokens used: ${totalUsage.totalTokens}`);
+console.log(`Total cost: ${formatCost(totalUsage.cost)}`);
+
+// Get detailed usage history
+const history = agent.getTokenUsageHistory();
+history.forEach((usage, index) => {
+  console.log(`Request ${index + 1}: ${usage.totalTokens} tokens, ${formatCost(usage.cost)}`);
+});
+
+// Integration with credits/billing systems
+const costUSD = response.cost?.totalCost || 0;
+const hbarPrice = 0.05; // Get current HBAR price
+const hbarEquivalent = costUSD / hbarPrice;
+const creditsToDeduct = Math.ceil(hbarEquivalent * 1000); // 1 credit = 0.001 HBAR
+
+console.log(`Credits to deduct: ${creditsToDeduct}`);
+
+// Reset tracking for new billing session
+agent.resetTokenUsageTracking();
+```
+
+#### Key Features:
+- **Automatic Tracking**: Token usage is tracked automatically for every API call
+- **Dynamic Pricing**: Fetches live pricing data from OpenRouter API with 24-hour caching
+- **Cost Breakdown**: Separate costs for prompt and completion tokens
+- **Session Management**: Reset tracking for new billing periods
+- **Model Support**: Supports all OpenAI models plus 300+ models from OpenRouter
+
+#### Response Structure:
+```typescript
+interface AgentResponse {
+  output: string;
+  tokenUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    modelName?: string;
+    timestamp?: Date;
+  };
+  cost?: {
+    promptCost: number;
+    completionCost: number;
+    totalCost: number;
+    currency: string; // 'USD'
+  };
+  // ... other fields
 }
 ```
 

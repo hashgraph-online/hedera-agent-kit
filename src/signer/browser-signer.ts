@@ -112,10 +112,10 @@ export class BrowserSigner extends AbstractSigner {
 
   /**
    * Retrieves the Hedera client instance.
-   * @returns {Client} The Hedera client instance.
+   * @returns {never} Always throws an error as BrowserSigner does not have a client instance.
    */
   //@ts-ignore
-  public getClient(): any {
+  public getClient(): never {
     throw new Error('BrowserSigner does not have a Hedera client instance.');
   }
 }

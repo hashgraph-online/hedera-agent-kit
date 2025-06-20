@@ -31,9 +31,7 @@ export class ListUnapprovedConnectionRequestsTool extends BaseHederaQueryTool<
     return this.hederaKit.hcs10();
   }
 
-  protected async executeQuery(
-    _: z.infer<typeof ListUnapprovedConnectionRequestsZodSchema>
-  ): Promise<unknown> {
+  protected async executeQuery(): Promise<unknown> {
     const hcs10Builder = this.getServiceBuilder() as HCS10Builder;
     await hcs10Builder.listUnapprovedConnectionRequests();
     const result = await hcs10Builder.execute();

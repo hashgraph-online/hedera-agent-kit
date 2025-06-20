@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { PrivateKey, AccountId } from '@hashgraph/sdk';
+import { PrivateKey } from '@hashgraph/sdk';
 import { detectKeyTypeFromString } from '@hashgraphonline/standards-sdk';
 import { ServerSigner } from '../../src/signer/server-signer';
 import { HederaAgentKit } from '../../src/agent/agent';
 import { parseKey } from '../../src/utils/key-utils';
-import { initializeTestKit } from './utils';
 import './setup-env';
 
 describe('ECDSA Key Support Integration Tests', () => {
-  let kit: HederaAgentKit;
   let testAccountId: string;
   let testPrivateKey: string;
   let testNetwork: 'testnet' | 'mainnet' = 'testnet';
@@ -22,8 +20,6 @@ describe('ECDSA Key Support Integration Tests', () => {
         'HEDERA_ACCOUNT_ID and HEDERA_PRIVATE_KEY must be set in environment'
       );
     }
-
-    kit = await initializeTestKit();
   });
 
   describe('Key Type Detection', () => {

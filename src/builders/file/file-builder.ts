@@ -3,7 +3,6 @@ import {
   FileAppendTransaction,
   FileUpdateTransaction,
   FileDeleteTransaction,
-  PrivateKey,
   PublicKey,
 } from '@hashgraph/sdk';
 import { Buffer } from 'buffer';

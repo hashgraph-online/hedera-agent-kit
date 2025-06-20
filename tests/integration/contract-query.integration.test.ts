@@ -10,6 +10,8 @@ import { HederaGetContractTool } from '../../src/langchain/tools/scs/get-contrac
 import { BaseHederaQueryToolParams } from '../../src/langchain/tools/common/base-hedera-query-tool';
 import { ModelCapability } from '../../src/types/model-capability';
 
+const BYTECODE_TRUNCATION_MESSAGE = '[Use includeBytecode=true';
+
 describe('Contract Query Tools with Flexible Response Processing', () => {
   let kit: HederaAgentKit;
   let openAIApiKey: string;
@@ -51,12 +53,16 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -68,7 +74,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       if (result.contract.bytecode) {
         expect(result.contract.bytecode.length).toBeGreaterThan(0);
-        if (result.contract.bytecode.includes('[Use includeBytecode=true')) {
+        if (result.contract.bytecode.includes(BYTECODE_TRUNCATION_MESSAGE)) {
           expect(result.contract.bytecode.length).toBeLessThan(300);
         }
       }
@@ -76,7 +82,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
       if (result.contract.runtime_bytecode) {
         expect(result.contract.runtime_bytecode.length).toBeGreaterThan(0);
         if (
-          result.contract.runtime_bytecode.includes('[Use includeBytecode=true')
+          result.contract.runtime_bytecode.includes(BYTECODE_TRUNCATION_MESSAGE)
         ) {
           expect(result.contract.runtime_bytecode.length).toBeLessThan(300);
         }
@@ -92,12 +98,16 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+         
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId} with includeBytecode set to true`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+       
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -109,7 +119,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
       if (result.contract.bytecode) {
         expect(result.contract.bytecode.length).toBeGreaterThan(200);
         expect(result.contract.bytecode).not.toContain(
-          '[Use includeBytecode=true'
+          BYTECODE_TRUNCATION_MESSAGE
         );
       }
     });
@@ -123,12 +133,14 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -153,12 +165,14 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -179,12 +193,14 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -211,12 +227,14 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -315,6 +333,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
@@ -322,6 +341,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
       const nonExistentContractId = '0.0.999999999';
       const prompt = `Get contract information for ${nonExistentContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -339,6 +359,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
@@ -346,6 +367,7 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
       const invalidContractId = 'invalid-contract-id';
       const prompt = `Get contract information for ${invalidContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -365,12 +387,14 @@ describe('Contract Query Tools with Flexible Response Processing', () => {
 
       const tool = new HederaGetContractTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get contract information for ${realContractId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();

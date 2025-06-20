@@ -5,6 +5,8 @@ import { StructuredTool } from '@langchain/core/tools';
 import { HCS10Client } from '../../src/hcs10/HCS10Client';
 import { Logger } from '@hashgraphonline/standards-sdk';
 
+const MOCK_PLUGIN_ID = MOCK_PLUGIN_ID;
+
 /**
  * Mock tool for testing
  */
@@ -21,7 +23,7 @@ class MockTool extends StructuredTool {
  * Mock plugin for testing
  */
 class MockPlugin extends BasePlugin {
-  id = 'mock-plugin';
+  id = MOCK_PLUGIN_ID;
   name = 'Mock Plugin';
   description = 'A mock plugin for testing';
   version = '1.0.0';
@@ -68,7 +70,7 @@ describe('PluginRegistry', () => {
     await registry.registerPlugin(mockPlugin);
 
     expect(mockPlugin.initialize).toHaveBeenCalledWith(mockContext);
-    expect(registry.getPlugin('mock-plugin')).toBe(mockPlugin);
+    expect(registry.getPlugin(MOCK_PLUGIN_ID)).toBe(mockPlugin);
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('Plugin registered')
     );
@@ -102,10 +104,10 @@ describe('PluginRegistry', () => {
   test('should unregister a plugin', async () => {
     await registry.registerPlugin(mockPlugin);
 
-    const result = await registry.unregisterPlugin('mock-plugin');
+    const result = await registry.unregisterPlugin(MOCK_PLUGIN_ID);
     expect(result).toBe(true);
     expect(mockPlugin.cleanup).toHaveBeenCalled();
-    expect(registry.getPlugin('mock-plugin')).toBeUndefined();
+    expect(registry.getPlugin(MOCK_PLUGIN_ID)).toBeUndefined();
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.stringContaining('Plugin unregistered')
     );
@@ -123,7 +125,7 @@ describe('PluginRegistry', () => {
       throw new Error('Cleanup error');
     });
 
-    const result = await registry.unregisterPlugin('mock-plugin');
+    const result = await registry.unregisterPlugin(MOCK_PLUGIN_ID);
     expect(result).toBe(true);
     expect(mockPlugin.cleanup).toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith(

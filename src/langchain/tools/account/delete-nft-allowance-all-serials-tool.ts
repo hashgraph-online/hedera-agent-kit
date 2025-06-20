@@ -42,8 +42,9 @@ export class HederaDeleteNftSerialAllowancesTool extends BaseHederaTransactionTo
     builder: BaseServiceBuilder,
     specificArgs: z.infer<typeof DeleteNftSerialAllowancesZodSchemaCore>
   ): Promise<void> {
+    // Note: Type cast necessary due to interface mismatch between Zod schema and builder params
     await (builder as AccountBuilder).deleteNftSerialAllowancesForAllSpenders(
-      specificArgs as any
+      specificArgs as unknown as Parameters<AccountBuilder['deleteNftSerialAllowancesForAllSpenders']>[0]
     );
   }
 }

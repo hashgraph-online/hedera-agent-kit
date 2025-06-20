@@ -2,6 +2,8 @@ import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { LLMResult } from '@langchain/core/outputs';
 import { Logger } from '@hashgraphonline/standards-sdk';
 
+const DEFAULT_MODEL = 'gpt-4o-mini';
+
 /**
  * Token usage data structure
  */
@@ -45,6 +47,7 @@ export class ModelPricingManager {
   private lastFetchTime: number = 0;
   private readonly CACHE_DURATION = 24 * 60 * 60 * 1000;
   private readonly OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/models';
+  private readonly DEFAULT_MODEL = 'gpt-4o-mini';
   private logger: Logger;
 
   private constructor() {
@@ -62,7 +65,7 @@ export class ModelPricingManager {
   private initializeFallbackPricing(): void {
     const fallbackPricing = {
       'gpt-4o': { prompt: 0.005, completion: 0.015 },
-      'gpt-4o-mini': { prompt: 0.00015, completion: 0.0006 },
+      [this.DEFAULT_MODEL]: { prompt: 0.00015, completion: 0.0006 },
       'gpt-4-turbo': { prompt: 0.01, completion: 0.03 },
       'gpt-4': { prompt: 0.03, completion: 0.06 },
       'gpt-3.5-turbo': { prompt: 0.0005, completion: 0.0015 },
@@ -169,7 +172,7 @@ export class ModelPricingManager {
     }
 
     return (
-      this.pricingCache.get('gpt-4o-mini') || {
+      this.pricingCache.get(this.DEFAULT_MODEL) || {
         prompt: 0.00015,
         completion: 0.0006,
       }
@@ -196,7 +199,7 @@ export class ModelPricingManager {
     }
 
     return (
-      this.pricingCache.get('gpt-4o-mini') || {
+      this.pricingCache.get(this.DEFAULT_MODEL) || {
         prompt: 0.00015,
         completion: 0.0006,
       }
@@ -284,7 +287,7 @@ export async function calculateTokenCost(
   tokenUsage: TokenUsage,
   modelName?: string
 ): Promise<CostCalculation> {
-  const model = modelName || tokenUsage.modelName || 'gpt-4o-mini';
+  const model = modelName || tokenUsage.modelName || DEFAULT_MODEL;
   const pricingManager = ModelPricingManager.getInstance();
   const pricing = await pricingManager.getPricing(model);
 
@@ -307,7 +310,7 @@ export function calculateTokenCostSync(
   tokenUsage: TokenUsage,
   modelName?: string
 ): CostCalculation {
-  const model = modelName || tokenUsage.modelName || 'gpt-4o-mini';
+  const model = modelName || tokenUsage.modelName || DEFAULT_MODEL;
   const pricingManager = ModelPricingManager.getInstance();
   const pricing = pricingManager.getPricingSync(model);
 

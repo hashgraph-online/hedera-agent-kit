@@ -7,9 +7,9 @@ import {
   AgentResponse,
 } from '../src/agent/conversational-agent';
 
-import { NetworkType } from '../../standards-sdk/src';
+import { NetworkType } from '@hashgraphonline/standards-sdk';
 
-async function testNotes() {
+async function testNotes(): Promise<void> {
   console.log('Starting Hedera Agent Kit - Notes System Test...');
 
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
@@ -94,7 +94,11 @@ async function testNotes() {
   }
 }
 
-testNotes().catch((error) => {
-  console.error('Unhandled error in testNotes:', error);
-  process.exit(1);
-});
+async function main(): Promise<void> {
+  testNotes().catch((error) => {
+    console.error('Unhandled error in testNotes:', error);
+    process.exit(1);
+  });
+}
+
+main();

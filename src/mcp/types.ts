@@ -211,14 +211,14 @@ export interface ServerInfo {
 
 export interface GenerateTransactionParams extends Record<string, unknown> {
   operation: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   signerAccountId?: string;
 }
 
 export interface GenerateTransactionResult {
   operation: 'generate_transaction_bytes';
   mode: 'provideBytes';
-  result: any;
+  result: unknown;
   transactionBytes?: string;
   message: string;
   status: 'completed' | 'failed' | 'unauthorized' | 'forbidden' | 'insufficient_credits';
@@ -231,7 +231,7 @@ export interface GenerateTransactionResult {
 
 export interface ScheduleTransactionParams extends Record<string, unknown> {
   operation: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
   scheduleMemo?: string;
   expirationTime?: number;
   waitForExpiry?: boolean;
@@ -241,7 +241,7 @@ export interface ScheduleTransactionParams extends Record<string, unknown> {
 export interface ScheduleTransactionResult {
   operation: 'schedule_transaction';
   mode: 'scheduleTransaction';
-  result: any;
+  result: unknown;
   scheduleId?: string;
   transactionBytes?: string;
   message: string;
@@ -255,13 +255,13 @@ export interface ScheduleTransactionResult {
 
 export interface ExecuteTransactionParams extends Record<string, unknown> {
   operation: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 export interface ExecuteTransactionResult {
   operation: 'execute_transaction';
   mode: 'directExecution';
-  result: any;
+  result: unknown;
   message: string;
   status: 'completed' | 'failed' | 'unauthorized' | 'forbidden' | 'insufficient_credits';
   error?: string;
@@ -297,19 +297,19 @@ export interface ProfileRefreshResult {
     lastChecked: string;
     needsUpdate: boolean;
   };
-  profile?: any;
-  topicInfo?: any;
+  profile?: unknown;
+  topicInfo?: unknown;
   error?: string;
 }
 
 export interface ExecuteQueryParams extends Record<string, unknown> {
   query: string;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 export interface ExecuteQueryResult {
   operation: 'execute_query';
-  result: any;
+  result: unknown;
   message: string;
   status: 'completed' | 'failed' | 'unauthorized';
   error?: string;

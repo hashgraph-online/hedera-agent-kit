@@ -1,8 +1,6 @@
 import {
   HCS10BaseClient,
-  ConnectionsManager,
   AIAgentProfile,
-  Connection,
   IConnectionsManager,
 } from '@hashgraphonline/standards-sdk';
 
