@@ -7,10 +7,11 @@ import {
 } from '../common/base-hedera-transaction-tool';
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 import { HtsBuilder } from '../../../builders/hts/hts-builder';
+import { SERIALIZED_KEY_DESCRIPTION, FEE_COLLECTOR_DESCRIPTION } from './hts-tool-utils';
 
 const FixedFeeInputSchema = z.object({
   type: z.enum(['FIXED', 'FIXED_FEE']),
-  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
+  feeCollectorAccountId: z.string().optional().describe(FEE_COLLECTOR_DESCRIPTION),
   denominatingTokenId: z
     .string()
     .optional()
@@ -22,7 +23,7 @@ const FixedFeeInputSchema = z.object({
 
 const FractionalFeeInputSchema = z.object({
   type: z.enum(['FRACTIONAL', 'FRACTIONAL_FEE']),
-  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
+  feeCollectorAccountId: z.string().optional().describe(FEE_COLLECTOR_DESCRIPTION),
   numerator: z.number().int().describe('Numerator of the fractional fee.'),
   denominator: z
     .number()
@@ -45,7 +46,7 @@ const FractionalFeeInputSchema = z.object({
 
 const RoyaltyFeeInputSchema = z.object({
   type: z.enum(['ROYALTY', 'ROYALTY_FEE']),
-  feeCollectorAccountId: z.string().optional().describe("Fee collector's account ID. Defaults to user's account if in user-centric context and not specified."),
+  feeCollectorAccountId: z.string().optional().describe(FEE_COLLECTOR_DESCRIPTION),
   numerator: z.number().int().describe('Numerator of the royalty fee.'),
   denominator: z
     .number()
@@ -90,43 +91,43 @@ const FTCreateZodSchemaCore = z.object({
     .string()
     .optional()
     .describe(
-      'Optional. Admin key (serialized string). Builder handles parsing.'
+      `Optional. Admin key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   kycKey: z
     .string()
     .optional()
     .describe(
-      'Optional. KYC key (serialized string). Builder handles parsing.'
+      `Optional. KYC key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   freezeKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Freeze key (serialized string). Builder handles parsing.'
+      `Optional. Freeze key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   wipeKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Wipe key (serialized string). Builder handles parsing.'
+      `Optional. Wipe key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   supplyKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Supply key (serialized string). Builder handles parsing.'
+      `Optional. Supply key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   feeScheduleKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Fee schedule key (serialized string). Builder handles parsing.'
+      `Optional. Fee schedule key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   pauseKey: z
     .string()
     .optional()
     .describe(
-      'Optional. Pause key (serialized string). Builder handles parsing.'
+      `Optional. Pause key (${SERIALIZED_KEY_DESCRIPTION}`
     ),
   autoRenewAccountId: z
     .string()

@@ -34,6 +34,7 @@ const formatPinoLog = (chunk: string): string => {
   return chunk;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 process.stdout.write = function(chunk: any, ...args: any[]): boolean {
   if (typeof chunk === 'string') {
     if (!initializationComplete) {
@@ -50,6 +51,7 @@ process.stdout.write = function(chunk: any, ...args: any[]): boolean {
   return originalStdoutWrite.call(this, chunk, ...args);
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 process.stderr.write = function(chunk: any, ...args: any[]): boolean {
   if (!initializationComplete && typeof chunk === 'string') {
     if (chunk.includes('DeprecationWarning') || chunk.includes('MaxListenersExceededWarning')) {
@@ -59,10 +61,10 @@ process.stderr.write = function(chunk: any, ...args: any[]): boolean {
   return originalStderrWrite.call(this, chunk, ...args);
 };
 
-export function enableHederaLogging() {
+export function enableHederaLogging(): void {
   initializationComplete = true;
 }
 
-export function disableHederaLogging() {
+export function disableHederaLogging(): void {
   initializationComplete = false;
 }

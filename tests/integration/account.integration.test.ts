@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { HederaAgentKit } from '../../src/agent';
 import { ServerSigner } from '../../src/signer/server-signer';
 import {
@@ -92,32 +92,57 @@ async function createTestAgentExecutor(
   });
 }
 
-function getToolOutputFromResult(agentResult: any): any {
+interface ToolResult {
+  success?: boolean;
+  error?: unknown;
+  type?: string;
+  output?: unknown;
+  receipt?: {
+    tokenId?: { toString(): string };
+    serials?: number[];
+    status?: { toString(): string };
+    accountId?: { toString(): string };
+  };
+}
+
+function getToolOutputFromResult(agentResult: unknown): ToolResult {
   if (
-    agentResult.intermediateSteps &&
-    agentResult.intermediateSteps.length > 0
+    agentResult &&
+    typeof agentResult === 'object' &&
+    'intermediateSteps' in agentResult &&
+    Array.isArray((agentResult as { intermediateSteps: unknown[] }).intermediateSteps) &&
+    (agentResult as { intermediateSteps: unknown[] }).intermediateSteps.length > 0
   ) {
-    const lastStep =
-      agentResult.intermediateSteps[agentResult.intermediateSteps.length - 1];
-    const observation = lastStep.observation;
-    if (typeof observation === 'string') {
-      try {
-        return JSON.parse(observation);
-      } catch (e) {
-        /* ignore */
+    const intermediateSteps = (agentResult as { intermediateSteps: unknown[] }).intermediateSteps;
+    const lastStep = intermediateSteps[intermediateSteps.length - 1];
+    if (lastStep && typeof lastStep === 'object' && 'observation' in lastStep) {
+      const observation = (lastStep as { observation: unknown }).observation;
+      if (typeof observation === 'string') {
+        try {
+          return JSON.parse(observation) as ToolResult;
+        } catch {
+          /* ignore */
+        }
       }
+      return observation as ToolResult; // Return raw if not JSON string
     }
-    return observation; // Return raw if not JSON string
   }
   // Fallback for direct output if no intermediate steps (e.g. simple tools or errors)
-  if (typeof agentResult.output === 'string') {
+  if (
+    agentResult &&
+    typeof agentResult === 'object' &&
+    'output' in agentResult &&
+    typeof (agentResult as { output: unknown }).output === 'string'
+  ) {
     try {
-      return JSON.parse(agentResult.output);
-    } catch (e) {
+      return JSON.parse((agentResult as { output: string }).output) as ToolResult;
+    } catch {
       /* ignore */
     }
   }
-  return agentResult.output;
+  return (agentResult && typeof agentResult === 'object' && 'output' in agentResult 
+    ? (agentResult as { output: unknown }).output 
+    : agentResult) as ToolResult;
 }
 
 async function createNewHederaAccount(
@@ -160,7 +185,6 @@ describe('Hedera Account Service Tools Integration Tests', () => {
   let operatorAccountId: AccountId;
   let recipientAccount: AccountId;
   let recipientAccountPrivateKey: SDKPrivateKey; // Store private key
-  let recipientAccountPublicKey: SDKPublicKey; // Store public key
   let secondaryAccountSigner: ServerSigner; // For recipientAccount to sign its own associations
   let ftForAllowanceId: TokenId; // << For the new test suite
   let nftForNftAllowanceId: TokenId; // << NEW
@@ -177,8 +201,7 @@ describe('Hedera Account Service Tools Integration Tests', () => {
       10
     );
     recipientAccount = recipientDetails.accountId;
-    recipientAccountPrivateKey = recipientDetails.privateKey; // Store private key
-    recipientAccountPublicKey = recipientDetails.publicKey; // Store public key
+    recipientAccountPrivateKey = recipientDetails.privateKey;
     secondaryAccountSigner = new ServerSigner(
       recipientAccount,
       recipientAccountPrivateKey,

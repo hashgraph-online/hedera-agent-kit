@@ -97,13 +97,13 @@ export class AccountBuilder extends BaseServiceBuilder {
         this.logger.warn('Received null for autoRenewPeriod in createAccount.');
       } else if (
         typeof params.autoRenewPeriod === 'number' ||
-        (params.autoRenewPeriod as any) instanceof Long
+        (params.autoRenewPeriod as unknown) instanceof Long
       ) {
         transaction.setAutoRenewPeriod(params.autoRenewPeriod as number | Long);
         autoRenewPeriodSetByUser = true;
       } else if (
         typeof params.autoRenewPeriod === 'object' &&
-        typeof (params.autoRenewPeriod as any).seconds === 'number'
+        typeof (params.autoRenewPeriod as unknown as { seconds?: number }).seconds === 'number'
       ) {
         transaction.setAutoRenewPeriod(
           (params.autoRenewPeriod as { seconds: number }).seconds

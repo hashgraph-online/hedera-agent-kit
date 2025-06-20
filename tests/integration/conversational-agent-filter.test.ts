@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HederaConversationalAgent } from '../../src/agent/conversational-agent';
 import { AbstractSigner } from '../../src/signer/abstract-signer';
 import { PrivateKey, AccountId } from '@hashgraph/sdk';
-import { Logger } from '@hashgraphonline/standards-sdk';
 import { StructuredTool } from '@langchain/core/tools';
 
 /**
@@ -18,39 +17,47 @@ class MockSigner extends AbstractSigner {
     this.privateKey = privateKey;
   }
 
-  getAccountId(): AccountId {
+  override getAccountId(): AccountId {
     return this.accountId;
   }
 
-  getNetwork(): 'mainnet' | 'testnet' {
+  override getNetwork(): 'mainnet' | 'testnet' {
     return 'testnet';
   }
 
-  async getPublicKey(): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  override async getPublicKey(): Promise<any> {
     return this.privateKey.publicKey;
   }
 
-  getOperatorPrivateKey(): PrivateKey {
+  override getOperatorPrivateKey(): PrivateKey {
     return this.privateKey;
   }
 
-  async signTransaction(transaction: any): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  override async signTransaction(transaction: any): Promise<any> {
     return transaction;
   }
 
-  async signAndExecuteTransaction(transaction: any): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  override async signAndExecuteTransaction(): Promise<any> {
     return {
       status: { toString: () => 'SUCCESS' },
       transactionId: '0.0.12345@1234567890.123456789',
     };
   }
 
-  async checkTransactionStatus(transactionId: any): Promise<boolean> {
+  override async checkTransactionStatus(): Promise<boolean> {
     return true;
   }
 
-  getPrivateKey(): PrivateKey {
+  override getPrivateKey(): PrivateKey {
     return this.privateKey;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  override getClient(): any {
+    throw new Error('getClient not implemented in MockSigner');
   }
 }
 
@@ -58,7 +65,6 @@ describe('HederaConversationalAgent Tool Filter', () => {
   let agent: HederaConversationalAgent;
   let mockSigner: MockSigner;
   let originalEnv: NodeJS.ProcessEnv;
-  let consoleLogSpy: any;
   let filteredTools: string[] = [];
 
   beforeEach(() => {
@@ -69,7 +75,7 @@ describe('HederaConversationalAgent Tool Filter', () => {
     const testKey = PrivateKey.generateED25519();
     mockSigner = new MockSigner('0.0.12345', testKey);
 
-    consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
     filteredTools = [];
   });
 
@@ -135,8 +141,6 @@ describe('HederaConversationalAgent Tool Filter', () => {
   });
 
   it('should handle filter that removes all tools', async () => {
-    const logger = new Logger({ module: 'test', level: 'silent' });
-    const warnSpy = vi.spyOn(logger, 'warn');
 
     agent = new HederaConversationalAgent(mockSigner, {
       openAIApiKey: 'test-key',
@@ -146,6 +150,7 @@ describe('HederaConversationalAgent Tool Filter', () => {
     });
 
     // Spy on the agent's logger
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const agentLogger = (agent as any).logger;
     const agentWarnSpy = vi.spyOn(agentLogger, 'warn');
 

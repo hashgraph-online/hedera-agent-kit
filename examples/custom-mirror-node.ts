@@ -5,7 +5,7 @@ import { ServerSigner } from '../src/signer/server-signer';
 /**
  * Example demonstrating how to use HederaAgentKit with a custom mirror node configuration
  */
-async function exampleWithCustomMirrorNode() {
+async function exampleWithCustomMirrorNode(): Promise<void> {
   // Example 1: Using HGraph with API key in URL
   const hgraphConfig = {
     customUrl: 'https://mainnet.hedera.api.hgraph.dev/v1/<API-KEY>',
@@ -48,8 +48,13 @@ async function exampleWithCustomMirrorNode() {
   console.log('HederaAgentKit initialized with custom mirror node configuration');
 
   // Example with conversational agent
+  const openAIApiKey = process.env.OPENAI_API_KEY;
+  if (!openAIApiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is required');
+  }
+  
   const conversationalAgent = new HederaConversationalAgent(signer, {
-    openAIApiKey: process.env.OPENAI_API_KEY,
+    openAIApiKey,
     mirrorNodeConfig: customProviderConfig // Pass the custom config here
   });
 

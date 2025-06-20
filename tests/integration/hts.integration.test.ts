@@ -50,6 +50,8 @@ import { Buffer } from 'buffer'; // Buffer was missing from original inlined uti
 // Ensure environment variables are loaded for the test file itself
 dotenv.config({ path: path.resolve(__dirname, '../../../.env.test') });
 
+const TOKEN_ID_REGEX = new RegExp('^0\\.0\\.\\d+$');
+
 // --- INLINED UTILS ---
 /**
  * Initializes HederaAgentKit with a ServerSigner for testing.
@@ -165,9 +167,11 @@ async function createNewTestAccount(
 // --- END INLINED UTILS ---
 
 // Helper to extract tool output from AgentExecutor result
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getToolOutputFromResult(agentResult: any): any {
   console.log('Full agentResult:', JSON.stringify(agentResult, null, 2)); // Log the whole thing
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let toolOutputData: any;
 
   if (
@@ -189,15 +193,15 @@ function getToolOutputFromResult(agentResult: any): any {
     if (typeof observation === 'string') {
       try {
         toolOutputData = JSON.parse(observation);
-      } catch (e: any) {
+      } catch (error: unknown) {
         console.error(
           'Failed to parse observation string from intermediateStep. String was:',
           observation,
           'Error:',
-          e
+          error
         );
         throw new Error(
-          `Failed to parse observation string from intermediateStep. String was: "${observation}". Error: ${e.message}`
+          `Failed to parse observation string from intermediateStep. String was: "${observation}". Error: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else if (typeof observation === 'object' && observation !== null) {
@@ -231,9 +235,9 @@ function getToolOutputFromResult(agentResult: any): any {
         console.warn(
           'Parsed agentResult.output as a fallback. This might be unstable if it was natural language.'
         );
-      } catch (e: any) {
+      } catch (error: unknown) {
         throw new Error(
-          `No usable intermediate step observation, and agentResult.output was not valid JSON. Output: "${agentResult.output}". Error: ${e.message}`
+          `No usable intermediate step observation, and agentResult.output was not valid JSON. Output: "${agentResult.output}". Error: ${error instanceof Error ? error.message : String(error)}`
         );
       }
     } else {
@@ -250,7 +254,6 @@ describe('Hedera HTS Tools Integration Tests', () => {
   let createdTokenIds: TokenId[] = [];
   let treasuryAccountId: AccountId;
   let openAIApiKey: string;
-  let operatorAccountId: AccountId;
   let sharedSecondaryAccountId: AccountId; // For reusable secondary account
   let sharedSecondaryAccountPrivateKey: SDKPrivateKey; // Its private key
   let secondaryAccountSigner: ServerSigner; // << NEW: Signer for the shared secondary account
@@ -328,7 +331,7 @@ describe('Hedera HTS Tools Integration Tests', () => {
               `Receipt not found for deletion of token ${tokenId.toString()} despite success.`
             );
           }
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.error(
             `Failed to clean up token ${tokenId.toString()}:`,
             error
@@ -358,7 +361,7 @@ describe('Hedera HTS Tools Integration Tests', () => {
       expect(result.receipt).toBeDefined();
       expect(result.receipt.status).toEqual('SUCCESS');
       expect(result.receipt.tokenId?.toString()).toMatch(
-        new RegExp('^0\\.0\\.\\d+$')
+        TOKEN_ID_REGEX
       );
 
       if (result.receipt.tokenId) {
@@ -388,7 +391,7 @@ describe('Hedera HTS Tools Integration Tests', () => {
       expect(result.receipt).toBeDefined();
       expect(result.receipt.status).toEqual('SUCCESS');
       expect(result.receipt.tokenId?.toString()).toMatch(
-        new RegExp('^0\\.0\\.\\d+$')
+        TOKEN_ID_REGEX
       );
       if (result.receipt.tokenId) {
         const newId = result.receipt.tokenId;
@@ -419,7 +422,7 @@ describe('Hedera HTS Tools Integration Tests', () => {
       expect(result.receipt).toBeDefined();
       expect(result.receipt.status).toEqual('SUCCESS');
       expect(result.receipt.tokenId?.toString()).toMatch(
-        new RegExp('^0\\.0\\.\\d+$')
+        TOKEN_ID_REGEX
       );
 
       if (result.receipt.tokenId) {

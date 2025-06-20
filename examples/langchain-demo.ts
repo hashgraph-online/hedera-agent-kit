@@ -1,7 +1,9 @@
 if (typeof window === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (global as any).window = {};
 }
 if (typeof self === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (global as any).self = global;
 }
 
@@ -20,19 +22,19 @@ import {
 } from '../src/agent/conversational-agent';
 import { HelloWorldPlugin } from './hello-world-plugin';
 import type { IPlugin } from '../src/plugins';
-import { NetworkType } from '../../standards-sdk/src';
+import type { HederaNetworkType } from '../src/types';
 import chalk from 'chalk';
 import gradient from 'gradient-string';
 import { enableHederaLogging } from './hedera-logger-override';
 
-function createInterface() {
+function createInterface(): readline.Interface {
   return readline.createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 }
 
-async function main() {
+async function main(): Promise<void> {
   const hederaGradient = gradient(['#8259ef', '#2d84eb']);
   const successGradient = gradient(['#3ec878', '#2d84eb']);
   const warningColor = chalk.hex('#464646').dim;
@@ -78,7 +80,7 @@ ${hederaGradient(
 
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
   const operatorKey = process.env.HEDERA_PRIVATE_KEY;
-  const network = (process.env.HEDERA_NETWORK || 'testnet') as NetworkType;
+  const network = (process.env.HEDERA_NETWORK || 'testnet') as HederaNetworkType;
   const openaiApiKey = process.env.OPENAI_API_KEY;
 
   const userAccountId = process.env.USER_ACCOUNT_ID;
@@ -97,7 +99,7 @@ ${hederaGradient(
 
   const conversationalAgent = new HederaConversationalAgent(agentSigner, {
     operationalMode: mode as 'provideBytes' | 'directExecution',
-    userAccountId: userAccountId,
+    ...(userAccountId && { userAccountId }),
     verbose: false,
     openAIApiKey: openaiApiKey,
     scheduleUserTransactionsInBytesMode: true,
@@ -175,7 +177,7 @@ ${hederaGradient(
   async function handleUserSignedExecution(
     transactionBytesBase64: string,
     originalPromptForHistory?: string
-  ) {
+  ): Promise<void> {
     if (!userAccountId || !userPrivateKey) {
       console.log(
         warningColor(
@@ -228,9 +230,10 @@ ${hederaGradient(
       )}`;
       console.log(`${primaryGreen('Agent >')} ${primaryGreen(successMsg)}`);
       chatHistory.push({ type: 'ai', content: successMsg });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const error = e as Error;
       const errorMsg = `Sorry, I encountered an error executing that with your key: ${
-        e.message || String(e)
+        error.message || String(e)
       }`;
       console.error(
         `${errorColor('Agent >')} ${charcoal.dim(
@@ -245,7 +248,7 @@ ${hederaGradient(
   async function processAndRespond(
     userInput: string,
     isFollowUp: boolean = false
-  ) {
+  ): Promise<void> {
     if (!isFollowUp) {
       chatHistory.push({ type: 'human', content: userInput });
     }
@@ -345,7 +348,7 @@ ${hederaGradient(
     askQuestion();
   }
 
-  function askQuestion() {
+  function askQuestion(): void {
     setTimeout(() => {
       rl.question(`${primaryGreen('User >')} `, async (input) => {
         if (input.toLowerCase() === 'exit') {
@@ -364,8 +367,9 @@ ${hederaGradient(
             )}`
           );
           await processAndRespond(input);
-        } catch (e: any) {
-          const errorMsg = e.message || String(e);
+        } catch (e: unknown) {
+          const error = e as Error;
+          const errorMsg = error.message || String(e);
           console.error(
             `${errorColor('Error during agent invocation loop:')}`,
             errorMsg

@@ -61,6 +61,7 @@ describe('BasePlugin', () => {
     const plugin = new TestPlugin();
     await plugin.initialize(mockContext);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const context = (plugin as any).context;
     expect(context).toBe(mockContext);
     expect(context.config.testOption).toBe('test-value');

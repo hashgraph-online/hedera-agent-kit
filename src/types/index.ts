@@ -129,8 +129,8 @@ type ProtobufEncodedKey = {
 
 type CustomFees = {
   created_timestamp: string;
-  fixed_fees: any[];
-  fractional_fees: any[];
+  fixed_fees: unknown[];
+  fractional_fees: unknown[];
 };
 
 export type HtsTokenDetails = {
@@ -214,7 +214,7 @@ export type TopicInfoApiResponse = {
 };
 
 export type HCSMessage = {
-  chunk_info: null | any;
+  chunk_info: unknown | null;
   consensus_timestamp: string;
   message: string;
   payer_account_id: string;
@@ -1258,5 +1258,5 @@ export interface ContractQueryResult {
   // Various ways to get results based on type, e.getString, getInt32, etc.
   // For a generic tool, might return raw bytes or a common representation.
   resultAsBytes?: Uint8Array; // Raw result
-  resultDecoded?: any; // If ABI is available and decoding is attempted by the tool
+  resultDecoded?: unknown; // If ABI is available and decoding is attempted by the tool
 }

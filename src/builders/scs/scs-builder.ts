@@ -5,7 +5,6 @@ import {
   ContractDeleteTransaction,
   Hbar,
   Long,
-  PrivateKey,
   TransactionId,
   ContractCallQuery,
   ContractFunctionResult,

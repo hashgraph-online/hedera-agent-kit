@@ -5,14 +5,14 @@ import {
   HederaCreateTopicTool,
   HederaDeleteTopicTool,
 } from '../../src/langchain/tools/hcs'; // Assuming path to HCS tools index or specific file
-import { TopicId, AccountId } from '@hashgraph/sdk'; // AccountId might be needed for admin/submit keys
+import { TopicId } from '@hashgraph/sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 import { StructuredTool } from '@langchain/core/tools';
 import { ChatOpenAI } from '@langchain/openai';
 import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
 import { ChatPromptTemplate } from '@langchain/core/prompts';
-import { Buffer } from 'buffer';
+
 import { HederaSubmitMessageTool } from '../../src/langchain/tools/hcs'; // Assuming path to HCS tools index or specific file
 import { HederaUpdateTopicTool } from '../../src/langchain/tools/hcs'; // Assuming path to HCS tools index or specific file
 
@@ -75,63 +75,91 @@ async function createTestAgentExecutor(
   });
 }
 
-function getToolOutputFromResult(agentResult: any): any {
+interface HCSToolResult {
+  success?: boolean;
+  error?: unknown;
+  receipt?: {
+    status?: string;
+    topicId?: TopicId;
+    topicSequenceNumber?: number;
+  };
+}
+
+function getToolOutputFromResult(agentResult: unknown): HCSToolResult {
   console.log('Full agentResult:', JSON.stringify(agentResult, null, 2));
-  let toolOutputData: any;
+  let toolOutputData: HCSToolResult | undefined;
+  
   if (
-    agentResult.intermediateSteps &&
-    agentResult.intermediateSteps.length > 0
+    agentResult &&
+    typeof agentResult === 'object' &&
+    'intermediateSteps' in agentResult &&
+    Array.isArray((agentResult as { intermediateSteps: unknown[] }).intermediateSteps) &&
+    (agentResult as { intermediateSteps: unknown[] }).intermediateSteps.length > 0
   ) {
-    const lastStep =
-      agentResult.intermediateSteps[agentResult.intermediateSteps.length - 1];
-    const observation = lastStep.observation;
-    console.log(
-      'Last intermediate step action:',
-      JSON.stringify(lastStep.action, null, 2)
-    );
-    console.log(
-      'Attempting to use this observation from last intermediate step:',
-      observation
-    );
-    if (typeof observation === 'string') {
-      try {
-        toolOutputData = JSON.parse(observation);
-      } catch (e: any) {
-        throw new Error(
-          `Failed to parse observation string from intermediateStep. String was: "${observation}". Error: ${e.message}`
+    const intermediateSteps = (agentResult as { intermediateSteps: unknown[] }).intermediateSteps;
+    const lastStep = intermediateSteps[intermediateSteps.length - 1];
+    
+    if (lastStep && typeof lastStep === 'object' && 'observation' in lastStep && 'action' in lastStep) {
+      const observation = (lastStep as { observation: unknown; action: unknown }).observation;
+      console.log(
+        'Last intermediate step action:',
+        JSON.stringify((lastStep as { action: unknown }).action, null, 2)
+      );
+      console.log(
+        'Attempting to use this observation from last intermediate step:',
+        observation
+      );
+      
+      if (typeof observation === 'string') {
+        try {
+          toolOutputData = JSON.parse(observation) as HCSToolResult;
+        } catch (error: unknown) {
+          throw new Error(
+            `Failed to parse observation string from intermediateStep. String was: "${observation}". Error: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      } else if (typeof observation === 'object' && observation !== null) {
+        toolOutputData = observation as HCSToolResult;
+        console.log(
+          'Observation from intermediateStep was already an object, using directly:',
+          toolOutputData
+        );
+      } else {
+        console.warn(
+          'Observation in last intermediate step was not a string or a recognized object. Full step:',
+          lastStep
         );
       }
-    } else if (typeof observation === 'object' && observation !== null) {
-      toolOutputData = observation;
-      console.log(
-        'Observation from intermediateStep was already an object, using directly:',
-        toolOutputData
-      );
-    } else {
-      console.warn(
-        'Observation in last intermediate step was not a string or a recognized object. Full step:',
-        lastStep
-      );
     }
   }
+  
   if (!toolOutputData) {
     console.warn(
       'Could not find usable tool output in intermediateSteps. Attempting to parse agentResult.output.',
-      `agentResult.output: ${agentResult.output}`
+      `agentResult.output: ${agentResult && typeof agentResult === 'object' && 'output' in agentResult ? (agentResult as { output: unknown }).output : 'undefined'}`
     );
+    
     if (
       !(
-        agentResult.intermediateSteps &&
-        agentResult.intermediateSteps.length > 0
+        agentResult &&
+        typeof agentResult === 'object' &&
+        'intermediateSteps' in agentResult &&
+        Array.isArray((agentResult as { intermediateSteps: unknown[] }).intermediateSteps) &&
+        (agentResult as { intermediateSteps: unknown[] }).intermediateSteps.length > 0
       )
     ) {
-      if (typeof agentResult.output === 'string') {
+      if (
+        agentResult &&
+        typeof agentResult === 'object' &&
+        'output' in agentResult &&
+        typeof (agentResult as { output: unknown }).output === 'string'
+      ) {
         try {
-          toolOutputData = JSON.parse(agentResult.output);
+          toolOutputData = JSON.parse((agentResult as { output: string }).output) as HCSToolResult;
           console.warn('Parsed agentResult.output as a fallback.');
-        } catch (e: any) {
+        } catch (error: unknown) {
           throw new Error(
-            `No intermediate steps, and agentResult.output was not valid JSON. Output: "${agentResult.output}". Error: ${e.message}`
+            `No intermediate steps, and agentResult.output was not valid JSON. Output: "${(agentResult as { output: string }).output}". Error: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       } else {
@@ -145,19 +173,18 @@ function getToolOutputFromResult(agentResult: any): any {
       );
     }
   }
-  return toolOutputData;
+  
+  return toolOutputData || { success: false };
 }
 // --- END INLINED UTILS ---
 
 describe('Hedera HCS Tools Integration Tests', () => {
   let kit: HederaAgentKit;
   let openAIApiKey: string;
-  let operatorAccountId: AccountId;
   let createdTopicIds: TopicId[] = [];
 
   beforeAll(async () => {
     kit = await initializeTestKit();
-    operatorAccountId = kit.signer.getAccountId();
     openAIApiKey = process.env.OPENAI_API_KEY as string;
     if (!openAIApiKey) {
       throw new Error('OPENAI_API_KEY is not set in environment variables.');

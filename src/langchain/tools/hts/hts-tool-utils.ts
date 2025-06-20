@@ -10,6 +10,27 @@ import {
   Long,
 } from '@hashgraph/sdk';
 
+export const SERIALIZED_KEY_DESCRIPTION = 'serialized string). Builder handles parsing.';
+export const FEE_COLLECTOR_DESCRIPTION = "Fee collector's account ID. Defaults to user's account if in user-centric context and not specified.";
+
+interface FeeData {
+  feeCollectorAccountId: string;
+  feeType: 'FIXED_FEE' | 'FRACTIONAL_FEE' | 'ROYALTY_FEE';
+  amount?: string | number;
+  denominatingTokenId?: string;
+  numerator?: number;
+  denominator?: number;
+  minimumAmount?: string | number;
+  maximumAmount?: string | number;
+  assessmentMethod?: 'EXCLUSIVE' | 'INCLUSIVE';
+  netOfTransfers?: boolean;
+  fallbackFee?: {
+    amount: string | number;
+    denominatingTokenId?: string;
+  };
+  allCollectorsAreExempt?: boolean;
+}
+
 /**
  * Parses a JSON string representing an array of custom fee objects into an array of SDK CustomFee instances.
  * @param {string} customFeesJson - The JSON string to parse.
@@ -21,15 +42,16 @@ export function parseCustomFeesJson(
   customFeesJson: string,
   logger: StandardsSdkLogger
 ): CustomFee[] {
-  let parsedFeesInput: any[];
+  let parsedFeesInput: FeeData[];
   try {
-    parsedFeesInput = JSON.parse(customFeesJson) as any[];
+    parsedFeesInput = JSON.parse(customFeesJson) as FeeData[];
     if (!Array.isArray(parsedFeesInput)) {
       throw new Error('customFeesJson did not parse to an array.');
     }
-  } catch (error: any) {
-    logger.error('Invalid JSON string for customFeesJson:', error.message);
-    throw new Error(`Invalid JSON string for customFeesJson: ${error.message}`);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.error('Invalid JSON string for customFeesJson:', errorMessage);
+    throw new Error(`Invalid JSON string for customFeesJson: ${errorMessage}`);
   }
 
   return parsedFeesInput.map((feeData, index) => {

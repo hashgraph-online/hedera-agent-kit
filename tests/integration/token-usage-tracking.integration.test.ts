@@ -25,7 +25,7 @@ describe('Token Usage Tracking Integration', () => {
     }
   });
 
-  const createAgent = async () => {
+  const createAgent = async (): Promise<HederaConversationalAgent> => {
     const signer = new ServerSigner(testAccountId, testPrivateKey, 'testnet');
     const agent = new HederaConversationalAgent(signer, {
       openAIApiKey: openaiApiKey,

@@ -1,7 +1,6 @@
 import { resolve } from 'path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
-import StringReplace from 'vite-plugin-string-replace';
 import type { LibraryFormats } from 'vite';
 
 type BuildFormat = LibraryFormats;
@@ -89,6 +88,7 @@ function getGlobalName(id: string): string {
   return GLOBAL_MAP[id] || id;
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function createRollupOutput(format: BuildFormat) {
   if (format === 'cjs') {
     return {
@@ -107,17 +107,12 @@ function createRollupOutput(format: BuildFormat) {
   };
 }
 
+ 
 export default defineConfig(async () => {
   const format = (process.env.BUILD_FORMAT || 'es') as BuildFormat;
   const outputDir = getOutputDirectory(format);
 
   const plugins = [
-    StringReplace([
-      {
-        search: 'VITE_BUILD_FORMAT',
-        replace: format,
-      },
-    ]),
     dts({
       insertTypesEntry: true,
       include: ['src/**/*.ts'],

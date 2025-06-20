@@ -268,11 +268,11 @@ function mapToSdkCustomFees(
         const exhaustiveCheck: never = feeData;
         logger.warn(
           `Unsupported custom fee type encountered: ${
-            (exhaustiveCheck as any).type
+            (exhaustiveCheck as unknown as { type?: string }).type
           }`
         );
         throw new Error(
-          `Unsupported custom fee type: ${(exhaustiveCheck as any).type}`
+          `Unsupported custom fee type: ${(exhaustiveCheck as unknown as { type?: string }).type}`
         );
       }
     }
@@ -719,24 +719,30 @@ export class HtsBuilder extends BaseServiceBuilder {
             this.parseAmount(fungibleTransfer.amount)
           );
         } else if (transferInput.type === 'nft') {
-          const toolNftInput = transferInput as any;
+          const toolNftInput = transferInput as unknown as {
+            tokenId: string;
+            serial: string | number | Long;
+            senderAccountId: string;
+            receiverAccountId: string;
+            isApproved?: boolean;
+          };
 
-          const sdkTokenId = TokenId.fromString(toolNftInput.tokenId as string);
+          const sdkTokenId = TokenId.fromString(toolNftInput.tokenId);
 
           let serialValueForLong: number | Long;
           if (typeof toolNftInput.serial === 'string') {
             serialValueForLong = parseInt(toolNftInput.serial, 10);
           } else {
-            serialValueForLong = toolNftInput.serial as number | Long;
+            serialValueForLong = toolNftInput.serial;
           }
           const sdkSerial = Long.fromValue(serialValueForLong);
           const sdkNftId = new NftId(sdkTokenId, sdkSerial);
 
           const senderAccountId = AccountId.fromString(
-            toolNftInput.senderAccountId as string
+            toolNftInput.senderAccountId
           );
           const receiverAccountId = AccountId.fromString(
-            toolNftInput.receiverAccountId as string
+            toolNftInput.receiverAccountId
           );
 
           if (toolNftInput.isApproved) {

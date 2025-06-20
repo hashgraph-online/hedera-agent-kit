@@ -19,6 +19,8 @@ import { HederaGetHbarPriceTool } from '../../src/langchain/tools/network/get-hb
 import { HederaGetTransactionTool } from '../../src/langchain/tools/transaction/get-transaction-tool';
 import { BaseHederaQueryToolParams } from '../../src/langchain/tools/common/base-hedera-query-tool';
 
+const INVALID_ENTITY_ID = INVALID_ENTITY_ID;
+
 describe('Hedera Query Tools Integration Tests', () => {
   let kit: HederaAgentKit;
   let operatorAccountId: AccountId;
@@ -75,12 +77,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get account info using HederaGetAccountInfoTool', async () => {
       const tool = new HederaGetAccountInfoTool(queryToolParams);
       const agentExecutor = await createSimpleTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get account info for ${operatorAccountId.toString()}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -93,12 +97,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get account balance using HederaGetAccountBalanceTool', async () => {
       const tool = new HederaGetAccountBalanceTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get the HBAR balance for account ${operatorAccountId.toString()}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -112,12 +118,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get account public key using HederaGetAccountPublicKeyTool', async () => {
       const tool = new HederaGetAccountPublicKeyTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get the public key for account ${operatorAccountId.toString()}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -128,12 +136,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get account tokens using HederaGetAccountTokensTool', async () => {
       const tool = new HederaGetAccountTokensTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get the tokens associated with account ${operatorAccountId.toString()}, limit to 10 results`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -145,12 +155,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get account NFTs using HederaGetAccountNftsTool', async () => {
       const tool = new HederaGetAccountNftsTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get the NFTs owned by account ${operatorAccountId.toString()}, limit to 10 results`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -164,12 +176,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get topic info using HederaGetTopicInfoTool', async () => {
       const tool = new HederaGetTopicInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get information for topic ${realTopicId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -181,12 +195,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get topic fees using HederaGetTopicFeesTool', async () => {
       const tool = new HederaGetTopicFeesTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get the fees for topic ${realTopicId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -200,12 +216,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get token info using HederaGetTokenInfoTool', async () => {
       const tool = new HederaGetTokenInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get information for token ${realTokenId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -219,6 +237,7 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get HBAR price using HederaGetHbarPriceTool', async () => {
       const tool = new HederaGetHbarPriceTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
@@ -229,6 +248,7 @@ describe('Hedera Query Tools Integration Tests', () => {
 
       const prompt = `Get the HBAR price for timestamp ${timestamp}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -244,6 +264,7 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should handle non-existent transaction using HederaGetTransactionTool', async () => {
       const tool = new HederaGetTransactionTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
@@ -251,6 +272,7 @@ describe('Hedera Query Tools Integration Tests', () => {
       const fakeTransactionId = '0.0.123@1234567890.123456789';
       const prompt = `Get transaction details for transaction ID ${fakeTransactionId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -266,13 +288,15 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should handle invalid account ID gracefully', async () => {
       const tool = new HederaGetAccountInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
-      const invalidAccountId = '0.0.999999999';
+      const invalidAccountId = INVALID_ENTITY_ID;
       const prompt = `Get account information for account ${invalidAccountId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -287,13 +311,15 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should handle invalid topic ID gracefully', async () => {
       const tool = new HederaGetTopicInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
-      const invalidTopicId = '0.0.999999999';
+      const invalidTopicId = INVALID_ENTITY_ID;
       const prompt = `Get information for topic ${invalidTopicId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -308,13 +334,15 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should handle invalid token ID gracefully', async () => {
       const tool = new HederaGetTokenInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
-      const invalidTokenId = '0.0.999999999';
+      const invalidTokenId = INVALID_ENTITY_ID;
       const prompt = `Get information for token ${invalidTokenId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -330,12 +358,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get real account info', async () => {
       const tool = new HederaGetAccountInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get account information for account ${realAccountId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -347,12 +377,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get real topic info', async () => {
       const tool = new HederaGetTopicInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get information for topic ${realTopicId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();
@@ -364,12 +396,14 @@ describe('Hedera Query Tools Integration Tests', () => {
     it('should get real token info', async () => {
       const tool = new HederaGetTokenInfoTool(queryToolParams);
       const agentExecutor = await createTestAgentExecutor(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tool as any,
         openAIApiKey
       );
 
       const prompt = `Get information for token ${realTokenId}`;
       const agentResult = await agentExecutor.invoke({ input: prompt });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = getToolOutputFromResult(agentResult) as any;
 
       expect(result).toBeDefined();

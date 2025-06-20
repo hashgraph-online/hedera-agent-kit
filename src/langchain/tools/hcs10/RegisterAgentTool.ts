@@ -57,7 +57,7 @@ const RegisterAgentZodSchema = z.object({
       'Social media links (e.g., {"twitter": "@handle", "discord": "username"})'
     ),
   properties: z
-    .record(z.any())
+    .record(z.unknown())
     .optional()
     .describe('Custom metadata properties for the agent'),
   profilePicture: z

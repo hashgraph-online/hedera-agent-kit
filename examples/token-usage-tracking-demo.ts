@@ -4,13 +4,14 @@ dotenv.config();
 import { 
   HederaConversationalAgent, 
   ServerSigner, 
-  formatCost 
+  formatCost,
+  HederaNetworkType
 } from '@hashgraphonline/hedera-agent-kit';
 
 /**
  * Example demonstrating token usage tracking and cost calculation
  */
-async function main() {
+async function main(): Promise<void> {
   const operatorId = process.env.HEDERA_ACCOUNT_ID;
   const operatorKey = process.env.HEDERA_PRIVATE_KEY;
   const network = process.env.HEDERA_NETWORK || 'testnet';
@@ -23,7 +24,7 @@ async function main() {
   }
 
   // Initialize the signer and agent
-  const signer = new ServerSigner(operatorId, operatorKey, network as any);
+  const signer = new ServerSigner(operatorId, operatorKey, network as HederaNetworkType);
   const agent = new HederaConversationalAgent(signer, {
     openAIApiKey: openaiApiKey,
     operationalMode: 'provideBytes',

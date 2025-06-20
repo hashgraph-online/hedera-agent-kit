@@ -369,7 +369,10 @@ export abstract class BaseHederaQueryTool<
         processed.data !== null &&
         'success' in processed.data
       ) {
-        const toolResponse = processed.data as any;
+        const toolResponse = processed.data as Record<string, unknown> & {
+          success: unknown;
+          notes?: string[];
+        };
         const response = {
           ...toolResponse,
           ...(allNotes.length > 0 && {

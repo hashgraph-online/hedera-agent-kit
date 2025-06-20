@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+ 
 /**
  * @description Defines a simple Logger interface for the HederaAgentKit.
  */

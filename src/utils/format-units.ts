@@ -7,7 +7,7 @@ export function fromDisplayToBaseUnit(
   return displayBalance * 10 ** decimals;
 }
 
-export function fromBaseToDisplayUnit(baseBalance: number, decimals: number) {
+export function fromBaseToDisplayUnit(baseBalance: number, decimals: number): BigNumber {
   const decimalsBigNumber = new BigNumber(decimals);
   const divisor = new BigNumber(10).pow(decimalsBigNumber);
 

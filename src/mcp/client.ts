@@ -154,6 +154,9 @@ export class MCPClient {
         }
       );
 
+      // Note: StreamableHTTPClientTransport has optional sessionId which conflicts with Transport type
+      // This cast is necessary due to external library type compatibility
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this.client.connect(transport as any);
 
       this.isConnected = true;

@@ -25,7 +25,7 @@ beforeAll(() => {
   // Replace the inscribeProfile method with a mock
   HCS11Client.prototype.inscribeProfile = vi
     .fn()
-    .mockImplementation(async function (profile, options) {
+    .mockImplementation(async function (profile) {
       console.log(
         '[MOCK] HCS11Client.inscribeProfile called - returning mock topic 0.0.6093728'
       );
@@ -44,7 +44,7 @@ beforeAll(() => {
   if (HCS11Client.prototype.inscribeImage) {
     HCS11Client.prototype.inscribeImage = vi
       .fn()
-      .mockImplementation(async function (imageData, options) {
+      .mockImplementation(async function () {
         console.log(
           '[MOCK] HCS11Client.inscribeImage called - returning mock topic 0.0.6093729'
         );

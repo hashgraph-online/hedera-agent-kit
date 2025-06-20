@@ -1500,7 +1500,7 @@ export class HCS10Builder extends BaseServiceBuilder {
       const messages = await this.getMessages(inboundTopicId);
 
       const unapprovedRequests = messages.messages
-        .filter((msg) => msg.op === 'connection_request')
+        .filter((msg): msg is HCSMessageWithTimestamp & { op: string } => msg.op === 'connection_request')
         .map((msg) => ({
           requestId: msg.sequence_number,
           fromAccountId: msg.operator_id?.split('@')[1] || 'unknown',
@@ -1508,7 +1508,7 @@ export class HCS10Builder extends BaseServiceBuilder {
           memo: msg.m || '',
           data: msg.data,
         }))
-        .filter((req) => req.fromAccountId !== 'unknown');
+        .filter((req): req is typeof req & { fromAccountId: string } => req.fromAccountId !== 'unknown');
 
       this.executeResult = {
         success: true,
@@ -1572,13 +1572,13 @@ export class HCS10Builder extends BaseServiceBuilder {
       }
 
       const activeConnections = connections.filter(
-        (c) => (c as Connection).status === 'established'
+        (c): c is Connection => (c as Connection).status === 'established'
       );
       const pendingConnections = connections.filter(
-        (c) => (c as Connection).isPending
+        (c): c is Connection => (c as Connection).isPending
       );
       const needsConfirmation = connections.filter(
-        (c) => (c as Connection).needsConfirmation
+        (c): c is Connection => (c as Connection).needsConfirmation
       );
 
       let output = '';
@@ -1951,7 +1951,7 @@ export class HCS10Builder extends BaseServiceBuilder {
       }
 
       const formattedRegistrations = result.registrations
-        .map((reg: unknown) => {
+        .map((reg: unknown): string => {
           const registration = reg as {
             agent?: { name?: string; capabilities?: string[] };
             accountId?: string;
@@ -2039,7 +2039,7 @@ export class HCS10Builder extends BaseServiceBuilder {
 
       if (profile.social && Object.keys(profile.social).length > 0) {
         profileDetails += `Social: ${Object.entries(profile.social)
-          .map(([platform, handle]) => `${platform}: ${handle}`)
+          .map(([platform, handle]: [string, unknown]): string => `${platform}: ${handle}`)
           .join(', ')}\n`;
       }
 

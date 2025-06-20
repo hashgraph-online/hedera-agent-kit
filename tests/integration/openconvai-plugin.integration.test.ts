@@ -19,6 +19,11 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const TEST_NETWORK = 'testnet';
+const TEST_MODEL = 'test-model';
+const AGENT_A_NAME = AGENT_A_NAME;
+const AGENT_B_NAME = AGENT_B_NAME;
+
 /**
  * Comprehensive integration tests for all OpenConvAI plugin tools
  * Tests actual functionality against Hedera testnet with two agents communicating
@@ -40,13 +45,13 @@ describe('OpenConvAI Plugin Integration Tests', () => {
    */
   function createAgentABuilder(): AgentBuilder {
     return new AgentBuilder()
-      .setName('OpenConvAI Test Agent A')
+      .setName(AGENT_A_NAME)
       .setAlias('openconvai_test_agent_a')
       .setBio('Test agent A for integration testing')
       .setCapabilities([AIAgentCapability.TEXT_GENERATION])
       .setType('autonomous')
-      .setModel('test-model')
-      .setNetwork('testnet');
+      .setModel(TEST_MODEL)
+      .setNetwork(TEST_NETWORK);
   }
 
   /**
@@ -54,13 +59,13 @@ describe('OpenConvAI Plugin Integration Tests', () => {
    */
   function createAgentBBuilder(): AgentBuilder {
     return new AgentBuilder()
-      .setName('OpenConvAI Test Agent B')
+      .setName(AGENT_B_NAME)
       .setAlias('openconvai_test_agent_b')
       .setBio('Test agent B for integration testing')
       .setCapabilities([AIAgentCapability.TEXT_GENERATION])
       .setType('autonomous')
-      .setModel('test-model')
-      .setNetwork('testnet');
+      .setModel(TEST_MODEL)
+      .setNetwork(TEST_NETWORK);
   }
 
   beforeAll(async () => {
@@ -184,7 +189,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
 
       // Update state managers with agent info
       const agentARegisteredAgent = {
-        name: 'OpenConvAI Test Agent A',
+        name: AGENT_A_NAME,
         accountId: agentAData.accountId,
         inboundTopicId: agentAData.inboundTopicId,
         outboundTopicId: agentAData.outboundTopicId,
@@ -193,7 +198,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
       };
 
       const agentBRegisteredAgent = {
-        name: 'OpenConvAI Test Agent B',
+        name: AGENT_B_NAME,
         accountId: agentBData.accountId,
         inboundTopicId: agentBData.inboundTopicId,
         outboundTopicId: agentBData.outboundTopicId,
@@ -350,7 +355,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
 
       if (stateManagerA) {
         const agentARegisteredAgent = {
-          name: 'OpenConvAI Test Agent A',
+          name: AGENT_A_NAME,
           accountId: agentAData.accountId,
           inboundTopicId: agentAData.inboundTopicId,
           outboundTopicId: agentAData.outboundTopicId,
@@ -363,7 +368,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
 
       if (stateManagerB) {
         const agentBRegisteredAgent = {
-          name: 'OpenConvAI Test Agent B',
+          name: AGENT_B_NAME,
           accountId: agentBData.accountId,
           inboundTopicId: agentBData.inboundTopicId,
           outboundTopicId: agentBData.outboundTopicId,
@@ -539,10 +544,10 @@ describe('OpenConvAI Plugin Integration Tests', () => {
               'Could not extract connection topic from accept result'
             );
           }
-        } catch (error: any) {
-          logger.info('Accept connection failed:', error.message);
-          // Connection might already be accepted
-          if (error.message.includes('already accepted')) {
+            } catch (error: unknown) {
+            logger.info('Accept connection failed:', error instanceof Error ? error.message : String(error));
+                      // Connection might already be accepted
+            if (error instanceof Error && error.message.includes('already accepted')) {
             logger.info('Connection already accepted, continuing');
           }
         }
@@ -640,7 +645,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
 
         if (stateManagerA) {
           stateManagerA.setCurrentAgent({
-            name: 'OpenConvAI Test Agent A',
+            name: AGENT_A_NAME,
             accountId: agentAData.accountId,
             inboundTopicId: agentAData.inboundTopicId,
             outboundTopicId: agentAData.outboundTopicId,
@@ -651,7 +656,7 @@ describe('OpenConvAI Plugin Integration Tests', () => {
 
         if (stateManagerB) {
           stateManagerB.setCurrentAgent({
-            name: 'OpenConvAI Test Agent B',
+            name: AGENT_B_NAME,
             accountId: agentBData.accountId,
             inboundTopicId: agentBData.inboundTopicId,
             outboundTopicId: agentBData.outboundTopicId,

@@ -7,12 +7,14 @@ import {
 import { BaseServiceBuilder } from '../../../builders/base-service-builder';
 import { HtsBuilder } from '../../../builders/hts/hts-builder';
 
+const FEE_COLLECTOR_DESCRIPTION = "Fee collector's account ID.";
+
 /**
  * Zod schema for a fixed fee input object.
  */
 const FixedFeeInputSchema = z.object({
   type: z.literal('FIXED'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  feeCollectorAccountId: z.string().describe(FEE_COLLECTOR_DESCRIPTION),
   denominatingTokenId: z
     .string()
     .optional()
@@ -27,7 +29,7 @@ const FixedFeeInputSchema = z.object({
  */
 const FractionalFeeInputSchema = z.object({
   type: z.literal('FRACTIONAL'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  feeCollectorAccountId: z.string().describe(FEE_COLLECTOR_DESCRIPTION),
   numerator: z.number().int().describe('Numerator of the fractional fee.'),
   denominator: z
     .number()
@@ -45,7 +47,7 @@ const FractionalFeeInputSchema = z.object({
  */
 const RoyaltyFeeInputSchema = z.object({
   type: z.literal('ROYALTY'),
-  feeCollectorAccountId: z.string().describe("Fee collector's account ID."),
+  feeCollectorAccountId: z.string().describe(FEE_COLLECTOR_DESCRIPTION),
   numerator: z.number().int().describe('Numerator of the royalty fee.'),
   denominator: z
     .number()

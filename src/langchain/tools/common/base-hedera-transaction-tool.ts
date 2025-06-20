@@ -83,13 +83,13 @@ interface ScheduleExecutionOptions {
  */
 export abstract class BaseHederaTransactionTool<
   //@ts-ignore
-  S extends z.ZodObject<any, any, any, any>
+  S extends z.ZodObject<z.ZodRawShape, z.UnknownKeysParam, z.ZodTypeAny>
 > extends StructuredTool<
   //@ts-ignore
   z.ZodObject<
     S['shape'] & { metaOptions: typeof HederaTransactionMetaOptionsSchema },
-    any,
-    any,
+    z.UnknownKeysParam,
+    z.ZodTypeAny,
     z.infer<S> & { metaOptions?: HederaTransactionMetaOptions },
     z.infer<S> & { metaOptions?: HederaTransactionMetaOptions }
   >

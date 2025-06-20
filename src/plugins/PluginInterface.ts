@@ -1,11 +1,12 @@
 import { Logger } from '../utils/logger';
 import { BaseHederaQueryTool } from '../langchain/tools/common/base-hedera-query-tool';
 import { BaseHederaTransactionTool } from '../langchain/tools/common/base-hedera-transaction-tool';
+import { z } from 'zod';
 
 /**
  * Union type for all Hedera tools
  */
-export type HederaTool = BaseHederaQueryTool<any> | BaseHederaTransactionTool<any>;
+export type HederaTool = BaseHederaQueryTool<z.AnyZodObject> | BaseHederaTransactionTool<z.AnyZodObject>;
 
 /**
  * Basic client interface required by plugins
